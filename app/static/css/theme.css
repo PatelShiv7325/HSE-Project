@@ -340,7 +340,7 @@ label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
     var(--bg);
 }
 .login-card { width: 380px; padding: 40px 36px; text-align: center; box-shadow: var(--shadow-md); }
-.login-card img { width: 160px; margin-bottom: 16px; }
+.login-card img { width: 175px; margin-bottom: 20px; }
 .login-card h2 { color: var(--navy); margin: 4px 0 2px; font-size: 18px; }
 .login-card .tag { color: var(--teal); font-size: 12px; margin-bottom: 26px; font-weight: 600; }
 .login-card form { text-align: left; display: flex; flex-direction: column; gap: 16px; }
