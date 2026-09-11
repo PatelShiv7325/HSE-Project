@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Site Visit & Measurement{% endblock %}
+{% block breadcrumb_title %}Site Visit{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0">Site Visit Table</h4>
+    <button class="btn btn-primary" type="button" onclick="document.getElementById('svForm').classList.toggle('open')">+ Schedule Visit</button>
+  </div>
+  <form id="svForm" method="post" action="{{ url_for('fieldwork.create_site_visit') }}" style="display:none; gap:10px; margin-bottom:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="lead_id" required>
+      <option value="">Select Lead</option>
+      {% for l in leads %}<option value="{{ l.id }}">{{ l.company_name }}</option>{% endfor %}
+    </select>
+    <select name="engineer_id">
+      <option value="">Assign Engineer</option>
+      {% for e in engineers %}<option value="{{ e.id }}">{{ e.user.name }}</option>{% endfor %}
+    </select>
+    <input type="datetime-local" name="scheduled_date">
+    <button class="btn btn-primary" type="submit">Save</button>
+  </form>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+      <option value="done" {% if status_filter == 'done' %}selected{% endif %}>Complete</option>
+    </select>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th><th>Company Name</th><th>Company Address</th><th>Client Name</th><th>Contact No</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for v in visits %}
+        <tr>
+          <td>{{ v.id }}</td>
+          <td>{{ v.lead.company_name if v.lead else '-' }}</td>
+          <td>{{ v.lead.company_address if v.lead and v.lead.company_address else '-' }}</td>
+          <td>{{ v.lead.client_name if v.lead else '-' }}</td>
+          <td>{{ v.lead.contact_no if v.lead else '-' }}</td>
+          <td><span class="status-pill {{ 'done' if v.status == 'done' else 'pending' }}">{{ 'COMPLETE' if v.status == 'done' else 'PENDING' }}</span></td>          <td>
+            <div style="display:flex; gap:6px;">
+              {% if v.status != 'done' %}
+              <form method="post" action="{{ url_for('fieldwork.complete_site_visit', visit_id=v.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" title="Mark Complete" style="width:30px; height:30px; border-radius:6px; background:var(--success-bg); color:var(--success); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No site visits found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'status': status_filter, 'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.site_visits', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.site_visits', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.site_visits', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+<style>#svForm.open { display:flex !important; flex-wrap: wrap; }</style>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login — {{ company_name }}{% endblock %}
+{% block guest_content %}
+<div class="login-wrap">
+  <div class="card login-card">
+    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="logo">
+    <h2>{{ company_name }}</h2>
+    <div class="tag">{{ company_tagline }}</div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="POST">
+      {{ form.hidden_tag() }}
+      <div>
+        <label>Email</label>
+        {{ form.email(placeholder="you@company.com") }}
+      </div>
+      <div>
+        <label>Password</label>
+        {{ form.password(placeholder="••••••••") }}
+      </div>
+      {{ form.submit(class="btn btn-primary", style="width:100%") }}
+    </form>
+  </div>
+</div>
+{% endblock %}

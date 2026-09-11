@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Assign{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0">DISH Assignment</h4>
+  </div>
+  <form method="post" action="{{ url_for('dish.create_case') }}" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:18px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:3px;">Create case for lead</label>
+      <select name="lead_id" required>
+        <option value="">Select lead</option>
+        {% for l in available_leads %}<option value="{{ l.id }}">{{ l.company_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Create Case</button>
+  </form>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px;">
+  {% for c in cases %}
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div style="background:var(--primary); color:#fff; padding:10px 14px; font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</div>
+      <form method="post" action="{{ url_for('dish.update_assignment', case_id=c.id) }}" style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label style="font-size:12px; color:var(--text-muted);">Documentation
+          <select name="documentation_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.documentation_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Stability
+          <select name="stability_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.stability_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Drafting
+          <select name="drafting_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.drafting_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Drafting Deadline
+          <input type="date" name="drafting_deadline" value="{{ c.drafting_deadline.strftime('%Y-%m-%d') if c.drafting_deadline else '' }}" style="width:100%;">
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Online Application
+          <select name="online_application_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.online_application_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Liaisoning Map
+          <select name="liaisoning_map_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.liaisoning_map_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">License
+          <select name="license_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.license_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label style="font-size:12px; color:var(--text-muted);">Liaisoning License
+          <select name="liaisoning_license_user_id" style="width:100%;">
+            <option value="">Select</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if c.liaisoning_license_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:12px; color:var(--text-muted);">#{{ c.lead_id }}</span>
+          <button class="btn btn-primary" type="submit" style="padding:5px 14px; font-size:12.5px;">Save</button>
+        </div>
+      </form>
+    </div>
+  {% else %}
+    <p class="text-muted">No DISH cases yet.</p>
+  {% endfor %}
+  </div>
+</div>
+{% endblock %}

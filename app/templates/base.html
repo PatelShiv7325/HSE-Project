@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ company_name }}{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo-icon.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/js/jquery.dataTables.min.js"></script>
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="{{ url_for('static', filename='images/logo-icon.png') }}" alt="{{ company_name }} logo">
+      <div class="brand-text">
+        <div class="name">{{ company_name|upper }}</div>
+        <div class="tagline">{{ company_tagline }}</div>
+      </div>
+    </div>
+
+    <a class="nav-item {% if request.path.startswith('/admin/dashboard') %}active{% endif %}" href="{{ url_for('admin.dashboard') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/workflow/todo') and not request.args.get('department') and not request.args.get('stage') %}active{% endif %}" href="{{ url_for('workflow.todo') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>
+      <span class="nav-label">Todo Checklist</span>
+      {% if nav_counts and nav_counts.todo %}<span class="badge">{{ nav_counts.todo }}</span>{% endif %}
+    </a>
+
+    <div class="nav-section-label">Sales</div>
+    <a class="nav-item {% if request.path.startswith('/sales/leads') %}active{% endif %}" href="{{ url_for('sales.leads') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="M4 21v-1a6 6 0 0 1 6-6h1M17 21v-2a4 4 0 0 0-3-3.87"/><path d="M17 11a3 3 0 1 0 0-6"/></svg>
+      <span class="nav-label">New Lead</span>
+      {% if nav_counts and nav_counts.new_lead %}<span class="badge">{{ nav_counts.new_lead }}</span>{% endif %}
+    </a>
+    <a class="nav-item {% if request.path.startswith('/sales/estimation') %}active{% endif %}" href="{{ url_for('sales.estimation') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M6 3h8l5 5v13H6z"/><path d="M9 13h6M9 17h6"/></svg>
+      <span class="nav-label">Estimation</span>
+      {% if nav_counts and nav_counts.estimation %}<span class="badge">{{ nav_counts.estimation }}</span>{% endif %}
+    </a>
+
+    <div class="nav-section-label">Site Visit &amp; Measurement</div>
+    <a class="nav-item {% if request.path.startswith('/fieldwork/site-visits') %}active{% endif %}" href="{{ url_for('fieldwork.site_visits') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <span class="nav-label">Site Visit</span>
+      {% if nav_counts and nav_counts.site_visit %}<span class="badge">{{ nav_counts.site_visit }}</span>{% endif %}
+    </a>
+    <a class="nav-item {% if request.path.startswith('/fieldwork/measurements/assign') %}active{% endif %}" href="{{ url_for('fieldwork.assign_measurement_list') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2l6 6-11 11H3v-6z"/></svg>
+      <span class="nav-label">Assign Measurement</span>
+      {% if nav_counts and nav_counts.assign_measurement %}<span class="badge">{{ nav_counts.assign_measurement }}</span>{% endif %}
+    </a>
+    <a class="nav-item {% if request.path == '/fieldwork/measurements' %}active{% endif %}" href="{{ url_for('fieldwork.measurements') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg>
+      <span class="nav-label">Measurements</span>
+      {% if nav_counts and nav_counts.measurement %}<span class="badge">{{ nav_counts.measurement }}</span>{% endif %}
+    </a>
+
+    <div class="nav-section-label">Work</div>
+    <details class="nav-group" {% if request.path.startswith('/dish') %}open{% endif %}>
+      <summary class="nav-item nav-group-toggle {% if request.path.startswith('/dish') %}active{% endif %}">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-label">DISH</span>
+        <svg class="nav-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <div class="nav-subgroup">
+        <a class="nav-item nav-subitem {% if request.path == '/dish/assign' %}active{% endif %}" href="{{ url_for('dish.assign') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+          <span class="nav-label">Assign</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/form' %}active{% endif %}" href="{{ url_for('dish.form') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/></svg>
+          <span class="nav-label">Form</span>
+          {% if nav_counts and nav_counts.dish_form %}<span class="badge">{{ nav_counts.dish_form }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/documents' %}active{% endif %}" href="{{ url_for('dish.documents') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="nav-label">Documents</span>
+          {% if nav_counts and nav_counts.dish_documents %}<span class="badge">{{ nav_counts.dish_documents }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/drafting' %}active{% endif %}" href="{{ url_for('dish.drafting') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5 10 14l-1 3 3-1 4.5-4.5z"/></svg>
+          <span class="nav-label">Drafting</span>
+          {% if nav_counts and nav_counts.dish_drafting %}<span class="badge">{{ nav_counts.dish_drafting }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/applications-dashboard' %}active{% endif %}" href="{{ url_for('dish.dish_applications') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-4 4"/></svg>
+          <span class="nav-label">Dish Applications</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/applications' %}active{% endif %}" href="{{ url_for('dish.applications') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span class="nav-label">Applications</span>
+          {% if nav_counts and nav_counts.dish_applications %}<span class="badge">{{ nav_counts.dish_applications }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/liaisoning-of-applications' %}active{% endif %}" href="{{ url_for('dish.liaisoning_applications') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h8M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg>
+          <span class="nav-label">Liaisoning of Applications</span>
+          {% if nav_counts and nav_counts.dish_liaisoning_applications %}<span class="badge">{{ nav_counts.dish_liaisoning_applications }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/certificates' %}active{% endif %}" href="{{ url_for('dish.certificates') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="6"/><path d="M9 14.5 7 22l5-3 5 3-2-7.5"/></svg>
+          <span class="nav-label">Certificates</span>
+          {% if nav_counts and nav_counts.dish_certificates %}<span class="badge">{{ nav_counts.dish_certificates }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/license' %}active{% endif %}" href="{{ url_for('dish.license_page') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M14 10h4M14 14h4"/></svg>
+          <span class="nav-label">License</span>
+          {% if nav_counts and nav_counts.dish_license %}<span class="badge">{{ nav_counts.dish_license }}</span>{% endif %}
+        </a>
+        <a class="nav-item nav-subitem {% if request.path == '/dish/liaisoning-of-license' %}active{% endif %}" href="{{ url_for('dish.liaisoning_license') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h8M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg>
+          <span class="nav-label">Liaisoning of License</span>
+        </a>
+      </div>
+    </details>
+    <a class="nav-item {% if request.path == '/workflow/drafting/architectural' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='architectural') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      <span class="nav-label">Architectural Drafting</span>
+      {% if nav_stage_counts and nav_stage_counts.get('Architectural Drafting') %}<span class="badge">{{ nav_stage_counts['Architectural Drafting'] }}</span>{% endif %}
+    </a>
+    <a class="nav-item {% if request.path == '/workflow/drafting/structural' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='structural') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      <span class="nav-label">Structural Drafting</span>
+      {% if nav_stage_counts and nav_stage_counts.get('Structural Drafting') %}<span class="badge">{{ nav_stage_counts['Structural Drafting'] }}</span>{% endif %}
+    </a>
+    <a class="nav-item {% if request.path == '/workflow/drafting/elevation' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='elevation') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      <span class="nav-label">3D Elevation Drafting</span>
+      {% if nav_stage_counts and nav_stage_counts.get('3D Elevation Drafting') %}<span class="badge">{{ nav_stage_counts['3D Elevation Drafting'] }}</span>{% endif %}
+    </a>
+
+    <div class="nav-section-label">Inspections</div>
+    <a class="nav-item {% if request.path.startswith('/inspections/form9') %}active{% endif %}" href="{{ url_for('inspections.form9_list') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span class="nav-label">Form 9 - Hoists/Lifts</span>
+    </a>
+
+    <div class="nav-section-label">Accounts</div>
+    <a class="nav-item {% if request.path.startswith('/accounts/payments') %}active{% endif %}" href="{{ url_for('accounts.payments') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+      <span class="nav-label">Payments</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/accounts/pending-payments') %}active{% endif %}" href="{{ url_for('accounts.pending_payments') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span class="nav-label">Pending Payments</span>
+      {% if nav_counts and nav_counts.pending_payments %}<span class="badge">{{ nav_counts.pending_payments }}</span>{% endif %}
+    </a>
+
+    {% if current_user.is_admin %}
+    <div class="nav-section-label">User Management</div>
+    <a class="nav-item {% if request.path.startswith('/admin/roles') %}active{% endif %}" href="{{ url_for('admin.roles') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+      <span class="nav-label">Roles</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/admin/users') %}active{% endif %}" href="{{ url_for('admin.users') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>
+      <span class="nav-label">Users</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/admin/engineers') %}active{% endif %}" href="{{ url_for('admin.engineers') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      <span class="nav-label">Engineers</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/admin/employees') %}active{% endif %}" href="{{ url_for('admin.employees') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 21v-1a6 6 0 0 1 12 0v1"/></svg>
+      <span class="nav-label">Employees</span>
+    </a>
+
+    <div class="nav-section-label">Setting</div>
+    <a class="nav-item {% if request.path.startswith('/admin/config') %}active{% endif %}" href="{{ url_for('admin.config_page') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
+      <span class="nav-label">Config</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/notifications/whatsapp-link') %}active{% endif %}" href="{{ url_for('notifications.whatsapp_link') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg>
+      <span class="nav-label">WhatsApp Link</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/notifications/whatsapp-logs') %}active{% endif %}" href="{{ url_for('notifications.whatsapp_logs') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <span class="nav-label">WhatsApp Logs</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/notifications/message-format') %}active{% endif %}" href="{{ url_for('notifications.message_format') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="nav-label">Message Format</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/notifications/email-settings') %}active{% endif %}" href="{{ url_for('notifications.email_settings') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+      <span class="nav-label">Email Settings</span>
+    </a>
+    {% endif %}
+
+    <div class="sidebar-footer">
+      <a class="nav-item" href="{{ url_for('auth.logout') }}" style="margin:0;">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+        <span class="nav-label">Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">
+        {% block breadcrumb_parent %}Dashboard{% endblock %} /
+        <strong>{% block breadcrumb_title %}{% endblock %}</strong>
+      </div>
+      <div class="icons">
+        <span class="icon-btn" title="Notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </span>
+        <div class="avatar">{{ current_user.name[0]|upper }}</div>
+      </div>
+    </div>
+    <div class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% else %}
+  {% block guest_content %}{% endblock %}
+{% endif %}
+{% block scripts %}{% endblock %}
+
+<script>
+  // Preserve the sidebar's scroll position across full-page navigations —
+  // without this, clicking any sidebar link reloads the page and the
+  // sidebar snaps back to the top.
+  (function () {
+    var sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+
+    var saved = sessionStorage.getItem('sidebarScrollTop');
+    if (saved !== null) {
+      sidebar.scrollTop = parseInt(saved, 10) || 0;
+    }
+
+    sidebar.addEventListener('scroll', function () {
+      sessionStorage.setItem('sidebarScrollTop', sidebar.scrollTop);
+    });
+
+    sidebar.querySelectorAll('a, summary').forEach(function (el) {
+      el.addEventListener('click', function () {
+        sessionStorage.setItem('sidebarScrollTop', sidebar.scrollTop);
+      });
+    });
+  })();
+
+  // Turns every table with class "dt-table" into a searchable, paginated
+  // table (Show N entries / Search / Previous-Next) — matches the reference
+  // dashboard's table behaviour without needing server-side pagination.
+  $(function () {
+    if ($.fn.DataTable) {
+      $('.dt-table').each(function () {
+        $(this).DataTable({
+          pageLength: 10,
+          lengthChange: true,
+          language: { search: "Search:", lengthMenu: "Show _MENU_ entries" },
+        });
+      });
+    }
+  });
+</script>
+
+<style>
+.nav-group summary { list-style:none; cursor:pointer; }
+.nav-group summary::-webkit-details-marker { display:none; }
+.nav-group summary::marker { display:none; content:""; }
+.nav-group-toggle .nav-chevron { margin-left:auto; transition:transform .15s; }
+.nav-group[open] > .nav-group-toggle .nav-chevron { transform:rotate(180deg); }
+.nav-subgroup { display:flex; flex-direction:column; position:relative; }
+.nav-subitem { padding-left:34px; gap:10px; position:relative; }
+.step-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--border-strong); flex-shrink:0;
+}
+.nav-subitem.active .step-dot { background:var(--primary); }
+.nav-subgroup::before {
+  content:"";
+  position:absolute;
+  left:23px; top:14px; bottom:14px;
+  width:1px;
+  background:var(--border);
+}
+</style>
+
+</body>
+</html>

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Accounts{% endblock %}
+{% block breadcrumb_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0">Payments Table</h4>
+  </div>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      <option value="estimate_generated" {% if status_filter == 'estimate_generated' %}selected{% endif %}>Estimate Generated</option>
+      <option value="advance_received" {% if status_filter == 'advance_received' %}selected{% endif %}>Advance Received</option>
+      <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+      <option value="complete" {% if status_filter == 'complete' %}selected{% endif %}>Complete</option>
+    </select>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th><th>Company Name</th><th>Client Name</th><th>Contact No</th><th>Paid Percentage</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in payments %}
+        <tr>
+          <td>{{ p.lead_id }}</td>
+          <td>{{ p.lead.company_name if p.lead else '-' }}</td>
+          <td>{{ p.lead.client_name if p.lead else '-' }}</td>
+          <td>{{ p.lead.contact_no if p.lead else '-' }}</td>
+          <td>{{ p.paid_percentage or 0 }}</td>
+          <td><span class="status-pill {{ 'done' if p.status == 'complete' else 'pending' }}">{{ (p.status or '-').replace('_', ' ')|upper }}</span></td>
+          <td>
+            <button type="button" title="Update Payment" onclick="document.getElementById('payRow{{ p.id }}').classList.toggle('open')" style="width:30px; height:30px; border-radius:6px; background:var(--info-bg); color:var(--info); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">₹</button>
+            <form id="payRow{{ p.id }}" method="post" action="{{ url_for('accounts.update_payment', payment_id=p.id) }}" class="payment-inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="number" name="paid_percentage" min="0" max="100" value="{{ p.paid_percentage or 0 }}" style="width:70px;" placeholder="%">
+              <select name="status">
+                <option value="estimate_generated" {% if p.status == 'estimate_generated' %}selected{% endif %}>Estimate Generated</option>
+                <option value="advance_received" {% if p.status == 'advance_received' %}selected{% endif %}>Advance Received</option>
+                <option value="pending" {% if p.status == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="complete" {% if p.status == 'complete' %}selected{% endif %}>Complete</option>
+              </select>
+              <button class="btn btn-primary" type="submit" style="padding:4px 10px; font-size:12px;">Save</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No payments found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'status': status_filter, 'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for(request.endpoint, page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p_num in range(1, total_pages + 1) %}
+        {% if p_num == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p_num }}</span>
+        {% elif p_num <= 2 or p_num > total_pages - 2 or (p_num >= page - 1 and p_num <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for(request.endpoint, page=p_num, **base_args) }}">{{ p_num }}</a>
+        {% elif p_num == 3 or p_num == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for(request.endpoint, page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+<style>
+.payment-inline-form { display:none; gap:8px; margin-top:8px; }
+.payment-inline-form.open { display:flex; }
+</style>
+{% endblock %}

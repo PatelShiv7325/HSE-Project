@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Setting{% endblock %}
+{% block breadcrumb_title %}Config{% endblock %}
+{% block content %}
+<div class="card">
+  <h4 style="margin:0 0 16px;">Config Table</h4>
+
+  {% if editing %}
+  <div style="margin-bottom:20px; padding:16px; background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm);">
+    <form method="post" action="{{ url_for('admin.update_config', config_id=editing.id) }}"
+          enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="min-width:240px;">
+        <label style="display:block; margin-bottom:3px;">{{ editing.title }}</label>
+        {% if editing.field_type == 'file' %}
+          <input type="file" name="file" accept="application/pdf" required>
+        {% else %}
+          <input type="number" name="value" value="{{ editing.value or '' }}" min="0" required>
+        {% endif %}
+      </div>
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-outline" href="{{ url_for('admin.config_page') }}">Cancel</a>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="table-scroll">
+    <table class="data-table dt-table">
+      <thead>
+        <tr><th>SR NO</th><th>Title</th><th>Value</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+      {% for c in configs %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ c.title }}</td>
+          <td>
+            {% if c.field_type == 'file' %}
+              {% if c.file_path %}
+                <a class="btn btn-outline" href="{{ url_for('static', filename='uploads/config/' ~ c.file_path) }}" target="_blank">View PDF</a>
+              {% else %}
+                <span class="text-muted">Not uploaded</span>
+              {% endif %}
+            {% else %}
+              {{ c.value or '-' }}
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('admin.config_page', edit=c.id) }}" title="Edit"
+               style="width:30px; height:30px; border-radius:6px; background:var(--warning-bg); color:var(--warning); display:flex; align-items:center; justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted" style="text-align:center; padding:24px;">No config rows yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

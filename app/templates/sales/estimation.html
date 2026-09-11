@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Sales{% endblock %}
+{% block breadcrumb_title %}Estimation{% endblock %}
+{% block content %}
+<div class="card">
+  <h4 style="margin-top:0;">Estimation Table</h4>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+      <option value="uploaded" {% if status_filter == 'uploaded' %}selected{% endif %}>Uploaded</option>
+      <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+      <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+    </select>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th><th>Company Name</th><th>Client Name</th><th>Contact No</th><th>Department</th><th>Amount</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in estimations %}
+        <tr {% if e.status == 'pending' %}style="background:#FDECEC;"{% endif %}>
+          <td>{{ e.id }}</td>
+          <td>{{ e.lead.company_name if e.lead else '-' }}</td>
+          <td>{{ e.lead.client_name if e.lead else '-' }}</td>
+          <td>{{ e.lead.contact_no if e.lead else '-' }}</td>
+          <td>{{ e.lead.department.name if e.lead and e.lead.department else '-' }}</td>
+          <td>{{ "{:,.0f}".format(e.amount) if e.amount else '' }}</td>
+          <td><span class="status-pill {{ 'pending' if e.status == 'pending' else 'done' if e.status == 'approved' else 'overdue' if e.status == 'rejected' else 'pending' }}">{{ e.status|upper }}</span></td>
+          <td>
+            {% if e.status == 'pending' %}
+            <a href="#" title="Upload Estimation" style="width:32px; height:32px; border-radius:50%; background:#fff; border:1.5px solid var(--warning); color:var(--warning); display:inline-flex; align-items:center; justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-muted" style="text-align:center; padding:24px;">No estimations found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'status': status_filter, 'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('sales.estimation', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('sales.estimation', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('sales.estimation', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

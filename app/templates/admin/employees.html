@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}User Management{% endblock %}
+{% block breadcrumb_title %}Employees{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Salary</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.name }}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.role.name if u.role else '-' }}</td>
+          <td>{{ '%.0f'|format(u.salary) if u.salary else '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted" style="text-align:center; padding:24px;">No employees yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}User Management{% endblock %}
+{% block breadcrumb_title %}Engineers{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Engineer Table</h4>
+    <a href="#" class="btn btn-primary" onclick="var p=document.getElementById('addEngineerPanel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; return false;">+ Add Engineer</a>
+  </div>
+
+  <div id="addEngineerPanel" style="display:{{ 'block' if editing else 'none' }}; margin-bottom:20px; padding:16px; background:#FAFBFD; border:1px solid var(--border); border-radius:var(--radius-sm);">
+    <form method="post"
+          action="{{ url_for('admin.edit_engineer', engineer_id=editing.id) if editing else url_for('admin.create_engineer') }}"
+          enctype="multipart/form-data" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if editing %}
+        <div>
+          <label style="display:block; margin-bottom:3px;">User</label>
+          <input type="text" value="{{ editing.user.name }}" disabled style="background:#EEF1F5;">
+        </div>
+      {% else %}
+        <div>
+          <label style="display:block; margin-bottom:3px;">Select User</label>
+          <select name="user_id" required>
+            <option value="">Select User</option>
+            {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+          </select>
+        </div>
+      {% endif %}
+      <div>
+        <label style="display:block; margin-bottom:3px;">Designation</label>
+        <input type="text" name="designation" placeholder="e.g. Engineer, Structure Engineer" value="{{ editing.designation or '' if editing else '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">License Number</label>
+        <input type="text" name="license_number" placeholder="License Number" value="{{ editing.license_number or '' if editing else '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">License Expiry Date</label>
+        <input type="date" name="license_expiry_date" value="{{ editing.license_expiry_date.strftime('%Y-%m-%d') if editing and editing.license_expiry_date else '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">{{ 'Replace Photo' if editing else 'Photo' }}</label>
+        <input type="file" name="photo" accept="image/*">
+      </div>
+      <button class="btn btn-primary" type="submit">{{ 'Save Changes' if editing else 'Add Engineer' }}</button>
+      {% if editing %}<a class="btn btn-outline" href="{{ url_for('admin.engineers') }}">Cancel</a>{% endif %}
+    </form>
+  </div>
+
+  <div class="table-scroll">
+    <table class="data-table dt-table">
+      <thead>
+        <tr>
+          <th>SR NO</th><th>Photo</th><th>Name</th><th>License Number</th><th>License Expiry Date</th><th>Designation</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in engineers %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>
+            {% if e.photo_filename %}
+              <img src="{{ url_for('static', filename='uploads/engineers/' ~ e.photo_filename) }}" alt="{{ e.user.name }}"
+                   style="width:40px; height:40px; object-fit:cover; border-radius:6px; border:1px solid var(--border);">
+            {% else %}
+              <div style="width:40px; height:40px; border-radius:6px; background:var(--info-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">
+                {{ e.user.name[0]|upper }}
+              </div>
+            {% endif %}
+          </td>
+          <td>{{ e.user.name }}</td>
+          <td>{{ e.license_number or '-' }}</td>
+          <td>{{ e.license_expiry_date.strftime('%Y-%m-%d') if e.license_expiry_date else '-' }}</td>
+          <td>
+            {% if e.designation %}
+              <span class="status-pill {{ 'done' if 'struct' in e.designation|lower else 'assigned' }}">{{ e.designation|upper }}</span>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex; gap:6px;">
+              <a href="{{ url_for('admin.engineers', edit=e.id) }}" title="Edit"
+                 style="width:30px; height:30px; border-radius:6px; background:var(--warning-bg); color:var(--warning); display:flex; align-items:center; justify-content:center;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+              </a>
+              <form method="post" action="{{ url_for('admin.delete_engineer', engineer_id=e.id) }}" onsubmit="return confirm('Remove this engineer?');" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" title="Delete"
+                        style="width:30px; height:30px; border-radius:6px; background:var(--danger-bg); color:var(--danger); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No engineers yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

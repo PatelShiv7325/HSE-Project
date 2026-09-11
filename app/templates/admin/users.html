@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Setting{% endblock %}
+{% block breadcrumb_title %}Users{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post" action="{{ url_for('admin.create_user') }}" style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="name" placeholder="Full Name" required>
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Password">
+    <select name="role_id">
+      <option value="">Role</option>
+      {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+    </select>
+    <input type="number" name="salary" placeholder="Monthly Salary" min="0" step="1" style="width:140px;">
+    <label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" name="is_admin"> Admin</label>
+    <button class="btn btn-primary" type="submit">Create User</button>
+  </form>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Admin</th><th>Salary</th><th></th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.name }}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.role.name if u.role else '-' }}</td>
+          <td>{{ 'Yes' if u.is_admin else 'No' }}</td>
+          <td>
+            <!-- Inline salary edit: number field + Save button posting to /admin/users/<id>/salary -->
+            <form method="post" action="{{ url_for('admin.update_salary', user_id=u.id) }}" style="display:flex; gap:6px; align-items:center;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="number" name="salary" value="{{ u.salary|int if u.salary else 0 }}" min="0" step="1" style="width:100px;">
+              <button class="btn btn-outline" type="submit" style="padding:4px 10px; font-size:12px;">Save</button>
+            </form>
+          </td>
+          <td>
+            {% if u.id != current_user.id %}
+            <form method="post" action="{{ url_for('admin.delete_user', user_id=u.id) }}"
+                  onsubmit="return confirm('Remove {{ u.name }}? This can\'t be undone.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" type="submit" style="padding:4px 10px; font-size:12px; border-color:var(--danger); color:var(--danger);">Remove</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

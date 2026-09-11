@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: "BankGothic";
+    src: url("{{ url_for('static', filename='fonts/BankGothic.ttf', _external=True) }}");
+  }
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Helvetica", Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
+  h1 { font-family: "BankGothic", Arial, sans-serif; font-size: 18px; text-align: center; margin: 0 0 2px; letter-spacing: 1px; }
+  .subtitle { text-align: center; font-size: 12px; color: #555; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  td, th { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #f2f4f7; width: 34%; font-weight: 600; }
+  .section-title { font-weight: 700; font-size: 12.5px; margin: 14px 0 6px; border-bottom: 1.5px solid #333; padding-bottom: 3px; }
+  .findings-table td:first-child { width: 60%; }
+  .cert-block { margin-top: 22px; }
+  .signature-line { margin-top: 40px; border-top: 1px solid #333; width: 220px; padding-top: 4px; font-size: 10.5px; }
+</style>
+</head>
+<body>
+  <h1>{{ company_name|default("HSE Project", true) }}</h1>
+  <div class="subtitle">FORM No. 9 &mdash; Certificate of Examination for Hoist / Lift</div>
+
+  <table>
+    <tr><th>Report No.</th><td>{{ report.report_no }}</td><th>Date</th><td>{{ report.report_date.strftime('%d-%m-%Y') if report.report_date else '' }}</td></tr>
+    <tr><th>Registration No.</th><td>{{ data.reg_no or '' }}</td><th>License No.</th><td>{{ data.license_no or '' }}</td></tr>
+    <tr><th>NIC Code</th><td>{{ data.nic_code or '' }}</td><th>Location</th><td>{{ data.location or '' }}</td></tr>
+    <tr><th>Occupier</th><td colspan="3">{{ data.occupier_name or '' }} &mdash; {{ data.address or '' }}</td></tr>
+  </table>
+
+  <div class="section-title">Hoist / Lift Details</div>
+  <table>
+    <tr><th>Description</th><td>{{ data.hoist_description or '' }}</td><th>Make</th><td>{{ data.hoist_make or '' }}</td></tr>
+    <tr><th>Tag No.</th><td>{{ data.tag_no or '' }}</td><th>Capacity</th><td>{{ data.capacity or '' }}</td></tr>
+    <tr><th>No. of Floors</th><td>{{ data.no_of_floors or '' }}</td><th>Date of Construction</th><td>{{ data.construction_date or '' }}</td></tr>
+    <tr><th>Max. Safe Working Load</th><td colspan="3">{{ data.max_safe_load or '' }}</td></tr>
+  </table>
+
+  <div class="section-title">Examination Findings</div>
+  <table class="findings-table">
+    {% for field, label in [
+      ('good_mechanical_order', 'Good Mechanical Order'),
+      ('enclosure_findings', 'Enclosure'),
+      ('landing_gates_findings', 'Landing Gates'),
+      ('interlock_findings', 'Interlocks'),
+      ('other_gate_fastenings', 'Other Gate Fastenings'),
+      ('cage_platform_findings', 'Cage / Platform'),
+      ('overrunning_devices', 'Overrunning Devices'),
+      ('suspension_ropes', 'Suspension Ropes / Chains'),
+      ('safety_gear', 'Safety Gear'),
+      ('brakes', 'Brakes'),
+      ('worm_gearing', 'Worm Gearing'),
+      ('electrical_equipment', 'Electrical Equipment'),
+      ('other_parts', 'Other Parts'),
+    ] %}
+    <tr><td>{{ label }}</td><td>{{ data.get(field, 'Satisfactory') }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <table>
+    <tr><th>Inaccessible Parts</th><td colspan="3">{{ data.inaccessible_parts or '-' }}</td></tr>
+    <tr><th>Repairs / Renewals Required</th><td colspan="3">{{ data.repairs_required or '-' }}</td></tr>
+    <tr><th>Remarks</th><td colspan="3">{{ data.remarks or '-' }}</td></tr>
+  </table>
+
+  <div class="cert-block">
+    <div class="section-title">Certification</div>
+    <p>{{ (data.certification_text or 'I certify that on {date} I have thoroughly examined this hoist or lift and the above is a correct report of the result.').replace('{date}', data.certification_date or '') }}</p>
+    <table>
+      <tr><th>Certification Date</th><td>{{ data.certification_date or '' }}</td><th>Next Exam Due</th><td>{{ data.next_exam_date or '' }}</td></tr>
+      <tr><th>Competent Person</th><td>{{ data.competent_person_name or '' }}</td><th>No.</th><td>{{ data.competent_person_no or '' }}</td></tr>
+      <tr><th>Title</th><td>{{ data.competent_person_title or '' }}</td><th>State</th><td>{{ data.competent_person_state or '' }}</td></tr>
+      <tr><th>Authority</th><td colspan="3">{{ data.competent_person_authority or '' }}</td></tr>
+    </table>
+    <div class="signature-line">Signature of Competent Person</div>
+  </div>
+</body>
+</html>

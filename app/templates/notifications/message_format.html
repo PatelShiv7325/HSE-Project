@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Setting{% endblock %}
+{% block breadcrumb_title %}Message Format{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar" style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <h4 style="margin:0">WhatsApp Message Formats &amp; Templates</h4>
+      <p class="text-muted" style="margin:4px 0 0; font-size:13px;">Configure dynamic text message formats for all automated WhatsApp notifications across the system.</p>
+    </div>
+    <a class="btn btn-outline" href="{{ url_for('notifications.whatsapp_logs') }}">Message Logs &amp; Triggers</a>
+  </div>
+
+  <form method="get" style="display:flex; gap:10px; margin:18px 0;">
+    <input type="text" name="q" value="{{ search }}" placeholder="Search templates by name, keyword…" style="flex:2; min-width:200px;">
+    <select name="category" onchange="this.form.submit()" style="flex:1; min-width:160px;">
+      <option value="">All Categories</option>
+      {% for c in categories %}
+        <option value="{{ c }}" {% if category_filter == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">Filter</button>
+  </form>
+
+  <details style="margin-bottom:20px;">
+    <summary class="btn btn-primary" style="display:inline-block; cursor:pointer; width:fit-content;">+ New / Edit Template</summary>
+    <form method="post" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; padding:14px; background:var(--surface-muted); border-radius:8px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="key" placeholder="Template key (e.g. billing_payment_receipt)" required style="flex:1; min-width:220px;">
+      <input type="text" name="title" placeholder="Template title" style="flex:1; min-width:220px;">
+      <input type="text" name="category" placeholder="Category (e.g. DISH Application)" style="flex:1; min-width:180px;">
+      <select name="status" style="min-width:120px;">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <textarea name="body" placeholder="Body — use {COMPANY_NAME}, {LEAD_NUMBER}, etc." style="width:100%; min-height:80px;"></textarea>
+      <button class="btn btn-primary" type="submit">Save Template</button>
+    </form>
+  </details>
+
+  {% for category, items in grouped.items() %}
+  <div class="card" style="margin-bottom:18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border);">
+      <strong>{{ category }}</strong>
+      <span class="badge">{{ items|length }} templates</span>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Template Title &amp; Key</th><th>Message Format Preview</th><th>Dynamic Keywords</th><th>Status</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t in items %}
+          <tr>
+            <td>
+              <strong>{{ t.title }}</strong><br>
+              <span class="text-muted" style="font-size:12px;">{{ t.key }}</span>
+            </td>
+            <td style="max-width:420px; font-size:13px;">{{ t.body }}</td>
+            <td>
+              {% for kw in t.dynamic_keywords %}
+                <span class="badge" style="background:var(--info-bg); color:var(--info); margin:2px;">{{ '{' }}{{ kw }}{{ '}' }}</span>
+              {% endfor %}
+            </td>
+            <td><span class="status-pill {{ 'done' if t.status == 'active' else 'pending' }}">{{ t.status|upper }}</span></td>
+            <td>
+              <button type="button" title="Edit" onclick="document.getElementById('editTpl{{ t.id }}').classList.toggle('open')" style="width:30px; height:30px; border-radius:6px; background:var(--info-bg); color:var(--info); border:none; cursor:pointer;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+            </td>
+          </tr>
+          <tr id="editTpl{{ t.id }}" class="tpl-edit-row">
+            <td colspan="5" style="background:var(--surface-muted);">
+              <form method="post" style="display:flex; flex-wrap:wrap; gap:10px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="key" value="{{ t.key }}">
+                <input type="text" name="title" value="{{ t.title }}" style="flex:1; min-width:200px;">
+                <input type="text" name="category" value="{{ t.category }}" style="flex:1; min-width:160px;">
+                <select name="status" style="min-width:120px;">
+                  <option value="active" {% if t.status == 'active' %}selected{% endif %}>Active</option>
+                  <option value="inactive" {% if t.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+                <textarea name="body" style="width:100%; min-height:70px;">{{ t.body }}</textarea>
+                <button class="btn btn-primary" type="submit" style="padding:6px 16px;">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+    <p class="text-muted">No templates yet — add one above.</p>
+  {% endfor %}
+</div>
+<style>
+.tpl-edit-row { display:none; }
+.tpl-edit-row.open { display:table-row; }
+</style>
+{% endblock %}

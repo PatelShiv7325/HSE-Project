@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block breadcrumb_title %}Admin Dashboard{% endblock %}
+{% block content %}
+
+<!-- Tabs: these are real links to the other two dashboard pages, not JS toggles -->
+<div class="tab-row">
+  <a href="{{ url_for('admin.dashboard') }}" class="tab-pill active" style="text-decoration:none;">Admin Dashboard</a>
+  <a href="{{ url_for('admin.work_dashboard') }}" class="tab-pill" style="text-decoration:none;">Work Dashboard</a>
+  <a href="{{ url_for('admin.employee_dashboard') }}" class="tab-pill" style="text-decoration:none;">Employee Dashboard</a>
+</div>
+
+<!-- Top 6 stat cards -->
+<div class="stat-grid">
+  <div class="card stat-card">
+    <div class="label">New Works (Month)</div>
+    <div class="value">{{ new_works_month }}</div>
+  </div>
+  <div class="card stat-card accent-danger">
+    <div class="label">Unconfirmed Works</div>
+    <div class="value">{{ unconfirmed_works }}</div>
+  </div>
+  <div class="card stat-card accent-teal">
+    <div class="label">Pending / Completed</div>
+    <div class="value">{{ pending_stages }} / {{ completed_stages }}</div>
+  </div>
+  <div class="card stat-card">
+    <div class="label">Monthly Revenue</div>
+    <div class="value">₹{{ "{:,.0f}".format(monthly_revenue) }}</div>
+  </div>
+  <div class="card stat-card accent-danger">
+    <div class="label">Payment Pending</div>
+    <div class="value danger">₹{{ "{:,.0f}".format(payment_pending) }}</div>
+  </div>
+  <div class="card stat-card accent-success">
+    <div class="label">Payment Received</div>
+    <div class="value success">₹{{ "{:,.0f}".format(payment_received) }}</div>
+  </div>
+</div>
+
+<!-- Row: Business Growth | Department Revenue donut | Pending Work Control -->
+<div class="chart-grid" style="grid-template-columns: 1.4fr 1fr 1fr;">
+  <div class="card">
+    <h4>Business Growth (Last 12 Months)</h4>
+    <canvas id="businessGrowthChart" height="90"></canvas>
+  </div>
+
+  <div class="card">
+    <h4>Department Revenue</h4>
+    <canvas id="departmentRevenueChart" height="90"></canvas>
+    <div style="text-align:center; margin-top:10px;">
+      <div style="font-size:11px; letter-spacing:.05em; color:var(--text-muted);">TOTAL REVENUE</div>
+      <div style="font-size:18px; font-weight:700; color:var(--navy, #0B2545);">
+        ₹{{ "{:,.0f}".format(department_revenue_total) }}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>Pending Work Control</h4>
+    <div style="display:flex; flex-direction:column; gap:14px; margin-top:6px;">
+      <a href="{{ url_for('fieldwork.site_visits') }}" class="nav-item" style="justify-content:space-between; text-decoration:none; padding:0;">
+        <div><strong>Site Visit Pending</strong><br><span class="text-muted" style="font-size:12px;">Site Visit</span></div>
+        <span class="badge">{{ pending_control.site_visit }}</span>
+      </a>
+      <a href="{{ url_for('sales.estimation') }}" class="nav-item" style="justify-content:space-between; text-decoration:none; padding:0;">
+        <div><strong>Estimation Pending</strong><br><span class="text-muted" style="font-size:12px;">Estimation</span></div>
+        <span class="badge">{{ pending_control.estimation }}</span>
+      </a>
+      <a href="{{ url_for('fieldwork.assign_measurement_list') }}" class="nav-item" style="justify-content:space-between; text-decoration:none; padding:0;">
+        <div><strong>Measurement Assign Pending</strong><br><span class="text-muted" style="font-size:12px;">Measurement Assign</span></div>
+        <span class="badge">{{ pending_control.measurement_assign }}</span>
+      </a>
+      <a href="{{ url_for('fieldwork.measurements') }}" class="nav-item" style="justify-content:space-between; text-decoration:none; padding:0;">
+        <div><strong>Measurement Pending</strong><br><span class="text-muted" style="font-size:12px;">Measurement</span></div>
+        <span class="badge">{{ pending_control.measurement }}</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Row: Payment Trend | Monthly Revenue -->
+<div class="chart-grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <h4>Payment Trend</h4>
+    <canvas id="paymentTrendChart" height="90"></canvas>
+  </div>
+  <div class="card">
+    <h4>Monthly Revenue</h4>
+    <canvas id="monthlyRevenueChart" height="90"></canvas>
+  </div>
+</div>
+
+<!-- Employee Performance table -->
+<div class="card" style="margin-bottom:20px;">
+  <h4>Employee Performance</h4>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Employee</th><th>Role</th><th>Completed</th><th>Pending</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for row in employee_performance %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.role }}</td>
+          <td>{{ row.completed }}</td>
+          <td>{{ row.pending }}</td>
+          <td><span class="status-pill {{ row.status|lower }}">{{ row.status }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center; padding:16px;">No assigned work stages yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Role Wise Pending Load (horizontal bar, 0-100 scale) -->
+<div class="card" style="margin-bottom:20px;">
+  <h4>Role Wise Pending Load</h4>
+  <canvas id="roleLoadChart" height="140"></canvas>
+</div>
+
+<!-- Overdue by Work Type stat cards -->
+<div class="card" style="margin-bottom:20px;">
+  <h4>Overdue by Work Type</h4>
+  <div class="stat-grid">
+    {% for stage_name, count in overdue_rows %}
+    <div class="stat-card accent-danger">
+      <div class="label">{{ stage_name }}</div>
+      <div class="value danger">{{ count }}</div>
+      <div class="label">Overdue</div>
+    </div>
+    {% else %}
+    <div class="text-muted">No overdue work stages right now.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Row: Overdue Trend | Department Overdue Load -->
+<div class="chart-grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <h4>Overdue Trend (Last 6 Months)</h4>
+    <canvas id="overdueTrendChart" height="90"></canvas>
+  </div>
+  <div class="card">
+    <h4>Department Overdue Load</h4>
+    <canvas id="departmentOverdueChart" height="90"></canvas>
+  </div>
+</div>
+
+<!-- High Risk Works table -->
+<div class="card" style="margin-bottom:20px;">
+  <h4>High Risk Works</h4>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr><th>Lead No</th><th>Company</th><th>Department</th><th>Deadline</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+      {% for row in high_risk_works %}
+        <tr>
+          <td>{{ row.lead_id }}</td>
+          <td>{{ row.company }}</td>
+          <td>{{ row.department }}</td>
+          <td>
+            {% for d in row.deadlines %}
+              <div class="text-muted" style="color:#DC2626; font-size:12.5px;">{{ d }}</div>
+            {% endfor %}
+          </td>
+          <td><span class="status-pill overdue">{{ row.delayed_count }} DELAYED</span></td>
+          <td><a class="btn btn-primary" href="{{ url_for('workflow.todo') }}">Open</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:16px;">No high risk works right now.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Row: Top Revenue Clients | High Risk Payment Clients -->
+<div class="chart-grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <h4>Top Revenue Clients</h4>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Company</th><th>Total Revenue</th></tr></thead>
+        <tbody>
+        {% for row in top_revenue_clients %}
+          <tr>
+            <td>{{ row.company }}</td>
+            <td style="color:#0F9D71; font-weight:600;">₹{{ "{:,.0f}".format(row.total) }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="text-muted" style="text-align:center; padding:16px;">No received payments yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>High Risk Payment Clients</h4>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Company</th><th>Total</th><th>Pending</th><th>Risk</th></tr></thead>
+        <tbody>
+        {% for row in high_risk_payment_clients %}
+          <tr>
+            <td>{{ row.company }}</td>
+            <td>₹{{ "{:,.0f}".format(row.total) }}</td>
+            <td style="color:#DC2626; font-weight:600;">₹{{ "{:,.0f}".format(row.pending) }}</td>
+            <td><span class="status-pill overdue">FOLLOW-UP</span></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-muted" style="text-align:center; padding:16px;">No pending payments right now.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Employee Productivity table -->
+<div class="card" style="margin-bottom:20px; margin-top:20px;">
+  <h4>Employee Productivity</h4>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Employee</th><th>Work Value</th><th>Salary</th><th>Productivity</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for row in employee_productivity %}
+        <tr>
+          <td>{{ row.name|upper }}</td>
+          <td>₹{{ "{:,.0f}".format(row.work_value) }}</td>
+          <td>₹{{ "{:,.0f}".format(row.salary) }}</td>
+          <td>{{ row.productivity }}x</td>
+          <td><span class="status-pill {{ 'overdue' if row.status == 'DANGER' else 'done' }}">{{ row.status }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center; padding:16px;">No employees yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Employee Salary vs Work Value (grouped bar) -->
+<div class="card" style="margin-bottom:20px;">
+  <h4>Employee Salary vs Work Value</h4>
+  <canvas id="salaryVsWorkValueChart" height="90"></canvas>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

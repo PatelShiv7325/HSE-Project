@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Setting{% endblock %}
+{% block breadcrumb_title %}Message Format{% endblock %}
+{% block content %}
+
+<div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:16px;">
+  <a class="btn btn-outline" href="{{ url_for('notifications.whatsapp_link') }}">WhatsApp Connection</a>
+  <a class="btn btn-outline" href="{{ url_for('notifications.whatsapp_logs') }}">Message Logs &amp; Triggers</a>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <form method="get" style="display:flex; gap:10px; flex-wrap:wrap;">
+    <input type="text" name="q" value="{{ search }}" placeholder="Search templates by name, keyword..." style="flex:1; min-width:220px;">
+    <select name="category">
+      <option value="">All Categories</option>
+      {% for c in categories %}
+        <option value="{{ c }}" {{ 'selected' if category_filter == c }}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">Filter</button>
+    <a class="btn btn-outline" href="{{ url_for('notifications.message_format', edit=0) }}">+ New Template</a>
+  </form>
+</div>
+
+{% if editing or request.args.get('edit') == '0' %}
+<div class="card" style="margin-bottom:16px; background:#FAFBFD;">
+  <h4>{{ 'Edit Template' if editing else 'New Template' }}</h4>
+  <form method="post" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label style="display:block; margin-bottom:3px; font-size:12px;">Template Title</label>
+      <input type="text" name="title" value="{{ editing.title if editing else '' }}" placeholder="e.g. Payment Receipt" required>
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:3px; font-size:12px;">Key</label>
+      <input type="text" name="key" value="{{ editing.key if editing else '' }}" placeholder="e.g. billing_payment_receipt" required {{ 'readonly' if editing }}>
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:3px; font-size:12px;">Category</label>
+      <select name="category">
+        {% for c in categories %}
+          <option value="{{ c }}" {{ 'selected' if editing and editing.category == c }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block; margin-bottom:3px; font-size:12px;">Status</label>
+      <select name="status">
+        <option value="active" {{ 'selected' if editing and editing.status == 'active' }}>Active</option>
+        <option value="inactive" {{ 'selected' if editing and editing.status == 'inactive' }}>Inactive</option>
+      </select>
+    </div>
+    <div style="flex:1; min-width:280px;">
+      <label style="display:block; margin-bottom:3px; font-size:12px;">Body — use {PLACEHOLDER_NAME} for dynamic values</label>
+      <input type="text" name="body" value="{{ editing.body if editing else '' }}" placeholder="Dear {COMPANY_NAME}, ..." style="width:100%;" required>
+    </div>
+    <button class="btn btn-primary" type="submit">Save Template</button>
+    <a class="btn btn-outline" href="{{ url_for('notifications.message_format') }}">Cancel</a>
+  </form>
+</div>
+{% endif %}
+
+{% for category, templates in grouped.items() %}
+<div class="card" style="margin-bottom:16px;">
+  <h4>
+    <span style="display:flex; align-items:center; gap:8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      {{ category }}
+    </span>
+    <span class="badge" style="position:static; background:var(--info-bg); color:var(--primary);">{{ templates|length }} TEMPLATE{{ 'S' if templates|length != 1 }}</span>
+  </h4>
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr><th>Template Title &amp; Key</th><th>Message Format Preview</th><th>Dynamic Keywords</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+      {% for t in templates %}
+        <tr>
+          <td>
+            <strong>{{ t.title or t.key }}</strong><br>
+            <span class="text-muted" style="font-size:12px;">{{ t.key }}</span>
+          </td>
+          <td style="max-width:320px; font-size:12.5px;">{{ t.body }}</td>
+          <td>
+            {% for kw in t.dynamic_keywords %}
+              <span style="display:inline-block; background:var(--info-bg); color:var(--primary); padding:2px 6px; border-radius:4px; font-size:11px; margin:2px;">{{ '{' ~ kw ~ '}' }}</span>
+            {% endfor %}
+          </td>
+          <td><span class="status-pill {{ 'done' if t.status == 'active' else 'overdue' }}">{{ (t.status or 'active')|upper }}</span></td>
+          <td>
+            <a href="{{ url_for('notifications.message_format', edit=t.id) }}" title="Edit"
+               style="width:30px; height:30px; border-radius:6px; background:var(--warning-bg); color:var(--warning); display:flex; align-items:center; justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card text-muted" style="text-align:center; padding:24px;">No templates yet. Click "+ New Template" to add one.</div>
+{% endfor %}
+
+{% endblock %}

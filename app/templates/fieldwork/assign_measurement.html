@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Site Visit & Measurement{% endblock %}
+{% block breadcrumb_title %}Assign Measurement{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0">Assign Measurement Table</h4>
+  </div>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      <option value="unassigned" {% if status_filter == 'unassigned' %}selected{% endif %}>Unassigned</option>
+      <option value="assigned" {% if status_filter == 'assigned' %}selected{% endif %}>Assigned</option>
+    </select>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th><th>Company Name</th><th>Company Address</th><th>Client Name</th><th>Contact No</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for m in measurements %}
+        <tr>
+          <td>{{ m.site_visit_id }}</td>
+          <td>{{ m.site_visit.lead.company_name if m.site_visit and m.site_visit.lead else '-' }}</td>
+          <td>{{ m.site_visit.lead.company_address if m.site_visit and m.site_visit.lead and m.site_visit.lead.company_address else '-' }}</td>
+          <td>{{ m.site_visit.lead.client_name if m.site_visit and m.site_visit.lead else '-' }}</td>
+          <td>{{ m.site_visit.lead.contact_no if m.site_visit and m.site_visit.lead else '-' }}</td>
+          <td><span class="status-pill {{ 'assigned' if m.status == 'assigned' else 'pending' }}">{{ m.status|upper }}</span></td>
+          <td>
+            <button type="button" title="Assign" onclick="document.getElementById('assignRow{{ m.id }}').classList.toggle('open')" style="width:30px; height:30px; border-radius:6px; background:var(--info-bg); color:var(--info); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <form id="assignRow{{ m.id }}" method="post" action="{{ url_for('fieldwork.assign_measurement', measurement_id=m.id) }}" class="assign-inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="user_id" required>
+                <option value="">Select user…</option>
+                {% for u in users %}<option value="{{ u.id }}" {% if m.assigned_to_id == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+              </select>
+              <button class="btn btn-primary" type="submit" style="padding:4px 10px; font-size:12px;">Assign</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No measurements found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'status': status_filter, 'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.assign_measurement_list', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.assign_measurement_list', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('fieldwork.assign_measurement_list', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+<style>
+.assign-inline-form { display:none; gap:8px; margin-top:8px; }
+.assign-inline-form.open { display:flex; }
+</style>
+{% endblock %}

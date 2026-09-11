@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Inspections{% endblock %}
+{% block breadcrumb_title %}{{ 'Edit' if report else 'New' }} Form 9{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ 'Edit Form 9 Report' if report else 'New Form 9 Report (Hoist / Lift Examination)' }}</h4>
+    <a href="{{ url_for('inspections.form9_list') }}" class="btn btn-outline">Back to List</a>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <h4>Report Details</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div>
+        <label style="display:block; margin-bottom:3px;">Report No. *</label>
+        <input type="text" name="report_no" required value="{{ report.report_no if report else '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Date *</label>
+        <input type="date" name="date" required value="{{ report.report_date.isoformat() if report and report.report_date else today }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Registration No.</label>
+        <input type="text" name="reg_no" value="{{ data.reg_no or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">License No.</label>
+        <input type="text" name="license_no" value="{{ data.license_no or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">NIC Code</label>
+        <input type="text" name="nic_code" value="{{ data.nic_code or '' }}">
+      </div>
+    </div>
+
+    <h4>Occupier &amp; Site</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div>
+        <label style="display:block; margin-bottom:3px;">Occupier Name</label>
+        <input type="text" name="occupier_name" value="{{ data.occupier_name or '' }}">
+      </div>
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Address</label>
+        <input type="text" name="address" value="{{ data.address or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Location of Hoist</label>
+        <input type="text" name="location" value="{{ data.location or '' }}">
+      </div>
+    </div>
+
+    <h4>Hoist / Lift Details</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div>
+        <label style="display:block; margin-bottom:3px;">Description</label>
+        <input type="text" name="hoist_description" value="{{ data.hoist_description or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Make</label>
+        <input type="text" name="hoist_make" value="{{ data.hoist_make or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Tag No.</label>
+        <input type="text" name="tag_no" value="{{ data.tag_no or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Capacity</label>
+        <input type="text" name="capacity" value="{{ data.capacity or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">No. of Floors Served</label>
+        <input type="text" name="no_of_floors" value="{{ data.no_of_floors or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Date of Construction</label>
+        <input type="date" name="construction_date" value="{{ data.construction_date or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Max. Safe Working Load</label>
+        <input type="text" name="max_safe_load" value="{{ data.max_safe_load or '' }}">
+      </div>
+    </div>
+
+    <h4>Examination Findings</h4>
+    <p class="text-muted" style="margin-top:-8px; font-size:12.5px;">Leave a field on "Satisfactory" if no defect was found.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; margin-bottom:20px;">
+      {% for field, label in [
+        ('good_mechanical_order', 'Good Mechanical Order'),
+        ('enclosure_findings', 'Enclosure'),
+        ('landing_gates_findings', 'Landing Gates'),
+        ('interlock_findings', 'Interlocks'),
+        ('other_gate_fastenings', 'Other Gate Fastenings'),
+        ('cage_platform_findings', 'Cage / Platform'),
+        ('overrunning_devices', 'Overrunning Devices'),
+        ('suspension_ropes', 'Suspension Ropes / Chains'),
+        ('safety_gear', 'Safety Gear'),
+        ('brakes', 'Brakes'),
+        ('worm_gearing', 'Worm Gearing'),
+        ('electrical_equipment', 'Electrical Equipment'),
+        ('other_parts', 'Other Parts'),
+      ] %}
+      <div>
+        <label style="display:block; margin-bottom:3px;">{{ label }}</label>
+        <select name="{{ field }}">
+          {% set current = data.get(field, 'Satisfactory') %}
+          <option value="Satisfactory" {% if current == 'Satisfactory' %}selected{% endif %}>Satisfactory</option>
+          <option value="Not Satisfactory" {% if current == 'Not Satisfactory' %}selected{% endif %}>Not Satisfactory</option>
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Inaccessible Parts</label>
+        <input type="text" name="inaccessible_parts" value="{{ data.inaccessible_parts or '' }}">
+      </div>
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Repairs / Renewals Required</label>
+        <textarea name="repairs_required" rows="2">{{ data.repairs_required or '' }}</textarea>
+      </div>
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Remarks</label>
+        <textarea name="remarks" rows="2">{{ data.remarks or '' }}</textarea>
+      </div>
+    </div>
+
+    <h4>Certification</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div>
+        <label style="display:block; margin-bottom:3px;">Certification Date</label>
+        <input type="date" name="certification_date" value="{{ data.certification_date or today }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Next Examination Due</label>
+        <input type="date" name="next_exam_date" value="{{ data.next_exam_date or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Reminder Date</label>
+        <input type="date" name="reminder_date" value="{{ data.reminder_date or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Competent Person Name</label>
+        <input type="text" name="competent_person_name" value="{{ data.competent_person_name or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Title</label>
+        <input type="text" name="competent_person_title" value="{{ data.competent_person_title or 'Competent Person Declared by Director' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Authority</label>
+        <input type="text" name="competent_person_authority" value="{{ data.competent_person_authority or 'Industrial Safety & Health Gujarat State' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Competent Person No.</label>
+        <input type="text" name="competent_person_no" value="{{ data.competent_person_no or '' }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">State</label>
+        <input type="text" name="competent_person_state" value="{{ data.competent_person_state or 'Gujarat' }}">
+      </div>
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Certification Text</label>
+        <textarea name="certification_text" rows="2">{{ data.certification_text or 'I certify that on {date} I have thoroughly examined this hoist or lift and the above is a correct report of the result.' }}</textarea>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit">{{ 'Save Changes' if report else 'Create Report' }}</button>
+    <a class="btn btn-outline" href="{{ url_for('inspections.form9_list') }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

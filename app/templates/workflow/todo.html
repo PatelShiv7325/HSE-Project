@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Tasks{% endblock %}
+{% block breadcrumb_title %}Daily Work Checklist{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <div>
+      <h4 style="margin-bottom:2px; display:flex; align-items:center; justify-content:flex-start; gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>
+        Daily Todo &amp; Work Checklist
+      </h4>
+      <div class="text-muted" style="font-size:12.5px;">Track all your auto-generated and active workflow tasks across HSE applications.</div>
+    </div>
+    <div class="filters">
+      <a class="btn {{ 'btn-primary' if show == 'pending' else 'btn-outline' }}" href="{{ url_for('workflow.todo', show='pending') }}">Pending Tasks</a>
+      <a class="btn {{ 'btn-primary' if show == 'done' else 'btn-outline' }}" href="{{ url_for('workflow.todo', show='done') }}">Completed</a>
+      <a class="btn btn-outline" href="{{ url_for('workflow.todo', show=show) }}" title="Refresh">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      </a>
+    </div>
+  </div>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+    <input type="hidden" name="show" value="{{ show }}">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Task Details</th>
+          <th>Company / Lead</th>
+          <th>Role</th>
+          <th>Due Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for stage in stages %}
+        <tr>
+          <td>{{ start + loop.index0 }}</td>
+          <td style="max-width:340px;">
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top:3px; flex-shrink:0; color:var(--primary);"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
+              <div>
+                <strong>{{ stage.stage_name }}: {{ stage.lead.company_name if stage.lead else '' }}</strong>
+                <div class="text-muted" style="font-size:12px; margin-top:2px;">
+                  Draft CAD drawing and upload DWG &amp; PDF files for {{ stage.lead.company_name if stage.lead else 'this lead' }}.
+                </div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--primary);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="1"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/></svg>
+              {{ stage.lead.company_name if stage.lead else '-' }}
+            </div>
+            <div class="text-muted" style="font-size:11.5px; margin-top:2px;"># {{ stage.lead.id if stage.lead else '-' }}</div>
+          </td>
+          <td><span class="status-pill" style="background:var(--bg); color:var(--text-muted); border:1px solid var(--border);">{{ (stage.role.name if stage.role else '-')|upper }}</span></td>
+          <td>
+            {% if stage.status == 'done' %}
+              <span class="status-pill done">DONE</span>
+            {% elif stage.is_overdue %}
+              <span class="status-pill overdue">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                OVERDUE
+              </span>
+            {% else %}
+              <span class="status-pill pending">{{ stage.status|upper }}</span>
+            {% endif %}
+            <div class="text-muted" style="font-size:11.5px; margin-top:3px;">
+              {{ stage.due_date.strftime('%d %b %Y') if stage.due_date else 'No due date' }}
+            </div>
+          </td>
+          <td>
+            <div style="display:flex; gap:8px;">
+              {% if stage.status == 'pending' %}
+              <form method="post" action="{{ url_for('workflow.start_work', stage_id=stage.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-primary" type="submit" style="padding:7px 14px; font-size:12px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  Start Work
+                </button>
+              </form>
+              {% endif %}
+              {% if stage.status != 'done' %}
+              <form method="post" action="{{ url_for('workflow.complete_work', stage_id=stage.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" title="Mark Complete" style="width:32px; height:32px; border-radius:6px; border:1.5px solid var(--success); background:var(--success-bg); color:var(--success); cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:24px;">No tasks here.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'show': show, 'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('workflow.todo', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('workflow.todo', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('workflow.todo', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
