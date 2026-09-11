@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
@@ -54,6 +54,13 @@ def create_app():
     app.register_blueprint(accounts_bp)
 
     csrf.exempt(api_bp)
+
+    @app.route("/")
+    def index():
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return redirect(url_for("admin.dashboard"))
+        return redirect(url_for("auth.login"))
 
     @app.context_processor
     def inject_company():
