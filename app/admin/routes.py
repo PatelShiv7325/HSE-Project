@@ -72,7 +72,7 @@ def dashboard():
         )
         .join(WorkStage, WorkStage.assigned_to_id == User.id)
         .outerjoin(Role, Role.id == User.role_id)
-        .group_by(User.id)
+        .group_by(User.id, User.name, Role.name)
         .all()
     )
     employee_performance = []
