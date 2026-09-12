@@ -74,7 +74,7 @@ def dashboard():
         .outerjoin(Role, Role.id == User.role_id)
         .group_by(User.id, User.name, Role.name)
         .all()
-    )
+    )   
     employee_performance = []
     for name, role, completed, pending in perf_rows:
         employee_performance.append({

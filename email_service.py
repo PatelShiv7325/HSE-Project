@@ -19,6 +19,7 @@ import inspect
 import os
 import smtplib
 import ssl
+import requests
 from datetime import datetime
 from email.message import EmailMessage
 
@@ -80,6 +81,7 @@ def send_email(to_email, subject, body_text, body_html=None):
     (e.g. creating a user).
     """
     settings = get_smtp_settings()
+    brevo_api_key = os.environ.get("BREVO_API_KEY")
 
     caller = inspect.stack()[1]
     trigger_source = f"{caller.function}() @ {os.path.basename(caller.filename)}:{caller.lineno}"
@@ -103,16 +105,32 @@ def send_email(to_email, subject, body_text, body_html=None):
         if body_html:
             msg.add_alternative(body_html, subtype="html")
 
-        port = int(settings["port"] or 587)
-        if settings["use_tls"]:
-            with smtplib.SMTP(settings["host"], port, timeout=15) as server:
-                server.starttls(context=ssl.create_default_context())
-                server.login(settings["username"], settings["password"])
-                server.send_message(msg)
+        if brevo_api_key:
+            resp = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": brevo_api_key, "Content-Type": "application/json"},
+                json={
+                    "sender": {"name": settings["from_name"], "email": settings["from_email"]},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "textContent": body_text,
+                    **({"htmlContent": body_html} if body_html else {}),
+                },
+                timeout=15,
+            )
+            if resp.status_code >= 300:
+                raise RuntimeError(f"Brevo API error {resp.status_code}: {resp.text[:200]}")
         else:
-            with smtplib.SMTP_SSL(settings["host"], port, timeout=15, context=ssl.create_default_context()) as server:
-                server.login(settings["username"], settings["password"])
-                server.send_message(msg)
+            port = int(settings["port"] or 587)
+            if settings["use_tls"]:
+                with smtplib.SMTP(settings["host"], port, timeout=15) as server:
+                    server.starttls(context=ssl.create_default_context())
+                    server.login(settings["username"], settings["password"])
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP_SSL(settings["host"], port, timeout=15, context=ssl.create_default_context()) as server:
+                    server.login(settings["username"], settings["password"])
+                    server.send_message(msg)
         status = "sent"
     except Exception as exc:
         status = "failed"
