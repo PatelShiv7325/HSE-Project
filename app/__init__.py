@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
@@ -19,7 +19,7 @@ def create_app():
     login_manager.login_view = "auth.login"
     login_manager.login_message_category = "info"
 
-    from app.models import User, Lead, Estimation, SiteVisit, Measurement, WorkStage, InspectionReport
+    from app.models import User, Lead, Estimation, SiteVisit, Measurement, WorkStage, InspectionReport, Company
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -38,6 +38,7 @@ def create_app():
     from app.notifications.routes import notifications_bp
     from app.api.routes import api_bp
     from app.accounts.routes import accounts_bp
+    from app.companies.routes import companies_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -52,15 +53,9 @@ def create_app():
     app.register_blueprint(notifications_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(accounts_bp)
+    app.register_blueprint(companies_bp)
 
     csrf.exempt(api_bp)
-
-    @app.route("/")
-    def index():
-        from flask_login import current_user
-        if current_user.is_authenticated:
-            return redirect(url_for("admin.dashboard"))
-        return redirect(url_for("auth.login"))
 
     @app.context_processor
     def inject_company():
@@ -167,6 +162,10 @@ def _ensure_schema_upgrades():
             "lead_id": "INTEGER",
             "trigger_source": "VARCHAR(255)",
             "triggered_by": "VARCHAR(120)",
+        },
+        "inspection_report": {
+            "company_id": "INTEGER",
+            "renewed_from_id": "INTEGER",
         },
     }
 

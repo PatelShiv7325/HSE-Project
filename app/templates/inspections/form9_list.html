@@ -5,7 +5,11 @@
 <div class="card">
   <div class="toolbar">
     <h4 style="margin:0;">Form 9 Reports (Hoists / Lifts)</h4>
-    <a href="{{ url_for('inspections.form9_new') }}" class="btn btn-primary">+ New Form 9</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="{{ url_for('inspections.form9_export_excel', q=search) }}" class="btn btn-outline" title="Export the matching reports as an Excel registry">Export Excel</a>
+      <a href="{{ url_for('inspections.form9_export_pdf', q=search) }}" class="btn btn-outline" target="_blank" title="Merge the matching reports into one PDF">Export PDF</a>
+      <a href="{{ url_for('inspections.form9_new') }}" class="btn btn-primary">+ New Form 9</a>
+    </div>
   </div>
 
   <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">

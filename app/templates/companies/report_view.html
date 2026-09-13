@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Companies{% endblock %}
+{% block breadcrumb_title %}{{ company.name }} - Reports{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="toolbar">
+    <div>
+      <h4 style="margin:0 0 4px 0;">{{ company.name }}</h4>
+      <div class="text-muted" style="font-size:13px;">
+        {{ company.occupier_name or '-' }} &middot; Reg. No: {{ company.registration_no or '-' }} &middot; License No: {{ company.license_no or '-' }}
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="{{ url_for('companies.edit_company', company_id=company.id) }}" class="btn btn-outline">Edit Company</a>
+      <a href="{{ url_for('companies.list_companies') }}" class="btn btn-outline">Back to Companies</a>
+    </div>
+  </div>
+
+  <form method="get" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <input type="text" name="q" value="{{ search }}" placeholder="Search report no..." style="flex:1; min-width:180px;">
+    <select name="form_type" onchange="this.form.submit()">
+      <option value="">All Form Types</option>
+      {% for key, label in form_type_labels.items() %}
+        <option value="{{ key }}" {% if form_type == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="year" onchange="this.form.submit()">
+      <option value="">All Years</option>
+      {% for y in years %}
+        <option value="{{ y }}" {% if year == y|string %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-outline" type="submit">Filter</button>
+    <span class="text-muted" style="font-size:13px; margin-left:auto;">{{ total_reports }} report(s) match</span>
+  </form>
+</div>
+
+<form method="post" action="{{ url_for('companies.bulk_delete_reports') }}" onsubmit="return confirm('Delete the selected reports?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="company_id" value="{{ company.id }}">
+
+{% for ftype, label in form_type_labels.items() %}
+  {% set reports = grouped.get(ftype, []) %}
+  {% if not form_type or form_type == ftype %}
+  <div class="card" style="margin-bottom:16px;">
+    <h4 style="margin:0 0 12px 0;">{{ label }} <span class="text-muted" style="font-weight:400; font-size:13px;">({{ reports|length }})</span></h4>
+
+    {% if reports %}
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:30px;"><input type="checkbox" onclick="this.closest('table').querySelectorAll('.row-check').forEach(cb => cb.checked = this.checked)"></th>
+            <th>Report No.</th><th>Date</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in reports %}
+          {% set endpoints = form_type_endpoints.get(ftype) %}
+          <tr>
+            <td><input type="checkbox" class="row-check" name="report_ids" value="{{ r.id }}"></td>
+            <td>{{ r.report_no }}</td>
+            <td>{{ r.report_date.strftime('%d-%m-%Y') if r.report_date else '-' }}</td>
+            <td style="display:flex; gap:6px;">
+              {% if endpoints %}
+                <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for(endpoints.edit, report_id=r.id, form_type=ftype) }}">Edit</a>
+                <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" target="_blank" href="{{ url_for(endpoints.pdf, report_id=r.id, form_type=ftype) }}">PDF</a>
+              {% else %}
+                <span class="text-muted" style="font-size:12.5px;">Module coming soon</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="text-muted" style="font-size:13px;">No {{ label }} reports for this company yet.</div>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endfor %}
+
+<div style="margin-bottom:24px;">
+  <button type="submit" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);">Delete Selected</button>
+</div>
+</form>
+{% endblock %}

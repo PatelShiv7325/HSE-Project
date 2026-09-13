@@ -13,6 +13,22 @@
 
     <h4>Report Details</h4>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Company (optional - auto-fills occupier &amp; address below)</label>
+        <select id="company_select" name="company_id" onchange="fillFromCompany(this)">
+          <option value="">-- Select a company --</option>
+          {% for c in companies %}
+            <option value="{{ c.id }}"
+              data-occupier="{{ c.occupier_name or '' }}"
+              data-address="{{ c.address or '' }}"
+              data-reg="{{ c.registration_no or '' }}"
+              data-license="{{ c.license_no or '' }}"
+              {% if report and report.company_id == c.id %}selected{% endif %}>
+              {{ c.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Report No. *</label>
         <input type="text" name="report_no" required value="{{ report.report_no if report else '' }}">
@@ -23,11 +39,11 @@
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Registration No.</label>
-        <input type="text" name="reg_no" value="{{ data.reg_no or '' }}">
+        <input type="text" id="reg_no" name="reg_no" value="{{ data.reg_no or '' }}">
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">License No.</label>
-        <input type="text" name="license_no" value="{{ data.license_no or '' }}">
+        <input type="text" id="license_no" name="license_no" value="{{ data.license_no or '' }}">
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">NIC Code</label>
@@ -39,11 +55,11 @@
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
       <div>
         <label style="display:block; margin-bottom:3px;">Occupier Name</label>
-        <input type="text" name="occupier_name" value="{{ data.occupier_name or '' }}">
+        <input type="text" id="occupier_name" name="occupier_name" value="{{ data.occupier_name or '' }}">
       </div>
       <div style="grid-column:span 2;">
         <label style="display:block; margin-bottom:3px;">Address</label>
-        <input type="text" name="address" value="{{ data.address or '' }}">
+        <input type="text" id="address" name="address" value="{{ data.address or '' }}">
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Location of Hoist</label>
@@ -171,4 +187,29 @@
     <a class="btn btn-outline" href="{{ url_for('inspections.form9_list') }}">Cancel</a>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // When a company is picked from the dropdown, copy its occupier/address/
+  // reg-no/license-no into the matching fields below -- only fills fields
+  // that are currently empty, so it never overwrites something you already typed.
+  function fillFromCompany(select) {
+    var opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return;
+
+    var map = {
+      occupier_name: opt.getAttribute('data-occupier'),
+      address: opt.getAttribute('data-address'),
+      reg_no: opt.getAttribute('data-reg'),
+      license_no: opt.getAttribute('data-license'),
+    };
+    Object.keys(map).forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (el && !el.value && map[fieldId]) {
+        el.value = map[fieldId];
+      }
+    });
+  }
+</script>
 {% endblock %}

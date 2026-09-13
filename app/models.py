@@ -16,6 +16,32 @@ class Department(db.Model):
     name = db.Column(db.String(50), unique=True, nullable=False)
 
 
+class Company(db.Model):
+    """
+    Master record for a client company/site whose statutory inspection
+    certificates (Form 9, Form 10, Form 11, PSV, Centrifuge...) we issue.
+    One Company can have many InspectionReport rows across form types --
+    see Company.reports below and InspectionReport.company_id.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    address = db.Column(db.Text)
+    occupier_name = db.Column(db.String(255))
+    registration_no = db.Column(db.String(100))
+    license_no = db.Column(db.String(100))
+    company_code = db.Column(db.String(100))  # short internal reference code (like "company_id" in older exports)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    reports = db.relationship(
+        "InspectionReport", backref="company", lazy=True,
+        order_by="InspectionReport.report_date.desc()",
+    )
+
+    @property
+    def report_count(self):
+        return len(self.reports)
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
@@ -316,6 +342,8 @@ class InspectionReport(db.Model):
     report_no = db.Column(db.String(80), unique=True, nullable=False)
     report_date = db.Column(db.Date)
     occupier_name = db.Column(db.String(200))  # denormalized for fast list/search
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True, index=True)
+    renewed_from_id = db.Column(db.Integer, db.ForeignKey("inspection_report.id"), nullable=True)
     data = db.Column(db.JSON, nullable=False, default=dict)
 
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))

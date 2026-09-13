@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Inspections{% endblock %}
+{% block breadcrumb_title %}{{ config.label }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ config.label }} <span class="text-muted" style="font-weight:400; font-size:12.5px;">{{ config.rule }}</span></h4>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="{{ url_for('inspections.generic_export_excel', form_type=form_type, q=search) }}" class="btn btn-outline" title="Export the matching reports as an Excel registry">Export Excel</a>
+      <a href="{{ url_for('inspections.generic_export_pdf', form_type=form_type, q=search) }}" class="btn btn-outline" target="_blank" title="Merge the matching reports into one PDF">Export PDF</a>
+      <a href="{{ url_for('inspections.generic_new', form_type=form_type) }}" class="btn btn-primary">+ New Report</a>
+    </div>
+  </div>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Report No. or Occupier">
+    </div>
+    <button class="btn btn-outline" type="submit">Search</button>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Report No.</th><th>Date</th><th>Occupier</th><th>Next Exam Due</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in reports %}
+        <tr>
+          <td>{{ r.report_no }}{% if r.renewed_from_id %}<span class="text-muted" style="font-size:11px;"> (renewal)</span>{% endif %}</td>
+          <td>{{ r.report_date.strftime('%d-%m-%Y') if r.report_date else '-' }}</td>
+          <td>{{ r.occupier_name or '-' }}</td>
+          <td>{{ r.data.next_exam_date or '-' }}</td>
+          <td style="display:flex; gap:6px; flex-wrap:wrap;">
+            <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('inspections.generic_edit', form_type=form_type, report_id=r.id) }}">Edit</a>
+            <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" target="_blank" href="{{ url_for('inspections.generic_pdf', form_type=form_type, report_id=r.id) }}">PDF</a>
+            <form method="post" action="{{ url_for('inspections.generic_renew', form_type=form_type, report_id=r.id) }}" onsubmit="return confirm('Create a renewal report copied from this one?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" type="submit">Renew</button>
+            </form>
+            <form method="post" action="{{ url_for('inspections.generic_delete', form_type=form_type, report_id=r.id) }}" onsubmit="return confirm('Delete this report?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px; color:var(--danger); border-color:var(--danger);" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center; padding:24px;">No {{ config.label }} reports found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('inspections.generic_list', form_type=form_type, page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('inspections.generic_list', form_type=form_type, page=p, **base_args) }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('inspections.generic_list', form_type=form_type, page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

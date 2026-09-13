@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Companies{% endblock %}
+{% block breadcrumb_title %}All Companies{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Companies</h4>
+    <a href="{{ url_for('companies.new_company') }}" class="btn btn-primary">+ New Company</a>
+  </div>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries &nbsp;&nbsp; Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Name, Occupier, Reg. No or License No">
+    </div>
+    <button class="btn btn-outline" type="submit">Search</button>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Company Name</th><th>Occupier</th><th>Registration No.</th><th>License No.</th><th>Reports</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in companies %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td>{{ c.occupier_name or '-' }}</td>
+          <td>{{ c.registration_no or '-' }}</td>
+          <td>{{ c.license_no or '-' }}</td>
+          <td><a href="{{ url_for('companies.company_reports', company_id=c.id) }}">{{ c.report_count }} report(s)</a></td>
+          <td style="display:flex; gap:6px;">
+            <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('companies.company_reports', company_id=c.id) }}">Reports</a>
+            <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('companies.edit_company', company_id=c.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('companies.delete_company', company_id=c.id) }}" onsubmit="return confirm('Delete this company? Its linked reports will NOT be deleted, only unlinked.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px; color:var(--danger); border-color:var(--danger);" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:24px;">No companies found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('companies.list_companies', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('companies.list_companies', page=p, **base_args) }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('companies.list_companies', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -147,10 +147,36 @@
       {% if nav_stage_counts and nav_stage_counts.get('3D Elevation Drafting') %}<span class="badge">{{ nav_stage_counts['3D Elevation Drafting'] }}</span>{% endif %}
     </a>
 
+    <div class="nav-section-label">Companies</div>
+    <a class="nav-item {% if request.path.startswith('/companies') %}active{% endif %}" href="{{ url_for('companies.list_companies') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg>
+      <span class="nav-label">Companies</span>
+    </a>
+
     <div class="nav-section-label">Inspections</div>
+    <a class="nav-item {% if request.path == url_for('inspections.dashboard') %}active{% endif %}" href="{{ url_for('inspections.dashboard') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      <span class="nav-label">Compliance Dashboard</span>
+    </a>
     <a class="nav-item {% if request.path.startswith('/inspections/form9') %}active{% endif %}" href="{{ url_for('inspections.form9_list') }}">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
       <span class="nav-label">Form 9 - Hoists/Lifts</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/inspections/form10') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form10') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span class="nav-label">Form 10 - Cranes/Machines</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/inspections/form11') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form11') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span class="nav-label">Form 11 - Pressure Vessel</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/inspections/psv') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='psv') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span class="nav-label">PSV Certificate</span>
+    </a>
+    <a class="nav-item {% if request.path.startswith('/inspections/centrifuge') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='centrifuge') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span class="nav-label">Centrifuge Report</span>
     </a>
 
     <div class="nav-section-label">Accounts</div>

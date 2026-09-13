@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Inspections{% endblock %}
+{% block breadcrumb_title %}Compliance Dashboard{% endblock %}
+{% block content %}
+
+<!-- Top stat cards -->
+<div class="stat-grid">
+  <div class="card stat-card accent-teal">
+    <div class="label">Total Companies</div>
+    <div class="value">{{ stats.total_companies }}</div>
+  </div>
+  <div class="card stat-card accent-success">
+    <div class="label">Valid Documents</div>
+    <div class="value success">{{ stats.valid }}</div>
+  </div>
+  <div class="card stat-card accent-danger">
+    <div class="label">Critical Expiry <span class="text-muted" style="font-weight:400;">(&lt; 15 days)</span></div>
+    <div class="value danger">{{ stats.critical }}</div>
+  </div>
+  <div class="card stat-card">
+    <div class="label">Reminder <span class="text-muted" style="font-weight:400;">(&lt; 30 days)</span></div>
+    <div class="value" style="color:var(--warning);">{{ stats.reminder }}</div>
+  </div>
+  <div class="card stat-card accent-danger">
+    <div class="label">Expired</div>
+    <div class="value danger">{{ stats.expired }}</div>
+  </div>
+  <div class="card stat-card">
+    <div class="label">Total Reports</div>
+    <div class="value">{{ stats.total_reports }}</div>
+  </div>
+</div>
+
+<!-- Expiry tracker -->
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Expiry Tracker <span class="text-muted" style="font-weight:400; font-size:12.5px;">Due within 30 days, across Form 9 / 10 / 11, PSV &amp; Centrifuge</span></h4>
+    <input type="text" id="trackerSearch" placeholder="Search company, report no., form..." style="max-width:260px;">
+  </div>
+
+  <div class="tab-row" style="margin-bottom:14px;">
+    <span class="tab-pill active" data-filter="all">All ({{ expiring|length }})</span>
+    <span class="tab-pill" data-filter="critical">Critical ({{ expiring|selectattr('status','equalto','critical')|list|length }})</span>
+    <span class="tab-pill" data-filter="reminder">Reminder ({{ expiring|selectattr('status','equalto','reminder')|list|length }})</span>
+    <span class="tab-pill" data-filter="expired">Expired ({{ expiring|selectattr('status','equalto','expired')|list|length }})</span>
+    <span class="tab-pill" data-filter="renewed">Renewed ({{ expiring|selectattr('status','equalto','renewed')|list|length }})</span>
+  </div>
+
+  <div class="table-scroll">
+    <table class="data-table" id="trackerTable">
+      <thead>
+        <tr>
+          <th>Company / Occupier</th>
+          <th>Report No.</th>
+          <th>Form</th>
+          <th>Due Date</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for x in expiring %}
+        <tr data-status="{{ x.status }}" data-search="{{ (x.company_name or '') ~ ' ' ~ x.report.report_no ~ ' ' ~ x.form_label }}">
+          <td>{{ x.company_name or '-' }}</td>
+          <td>{{ x.report.report_no }}</td>
+          <td><span class="text-muted" style="font-size:12.5px;">{{ x.form_label }}</span></td>
+          <td>
+            {{ x.due_date.strftime('%d-%m-%Y') if x.due_date else 'N/A' }}
+            <div style="font-size:11px; font-weight:700; margin-top:2px;
+              {% if x.status == 'critical' %}color:var(--danger);
+              {% elif x.status == 'expired' %}color:var(--danger);
+              {% elif x.status == 'reminder' %}color:var(--warning);
+              {% elif x.status == 'renewed' %}color:var(--text-muted);
+              {% else %}color:var(--success);{% endif %}">
+              {% if x.status == 'renewed' %}Renewed
+              {% elif x.days_left is none %}No Date
+              {% elif x.days_left < 0 %}Expired {{ -x.days_left }}d ago
+              {% elif x.days_left == 0 %}Due Today
+              {% else %}{{ x.days_left }} days left{% endif %}
+            </div>
+          </td>
+          <td>
+            <span class="status-pill {{ 'overdue' if x.status in ('critical','expired') else ('pending' if x.status == 'reminder' else ('done' if x.status == 'valid' else 'assigned')) }}">
+              {{ x.status|capitalize }}
+            </span>
+          </td>
+          <td style="display:flex; gap:6px; flex-wrap:wrap;">
+            {% if x.status in ('critical', 'reminder', 'expired') and x.form_type != 'form9' %}
+            <form method="post" action="{{ url_for('inspections.generic_renew', form_type=x.form_type, report_id=x.report.id) }}"
+                  onsubmit="return confirm('Create a renewal report copied from this one?');" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" type="submit">Renew</button>
+            </form>
+            {% endif %}
+            <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;"
+               href="{{ url_for('inspections.form9_edit', report_id=x.report.id) if x.form_type == 'form9' else url_for('inspections.generic_edit', form_type=x.form_type, report_id=x.report.id) }}">Open</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-muted);">Nothing due in the next 30 days. All clear.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Chart + Recent Activity -->
+<div class="chart-grid">
+  <div class="card">
+    <h4>Inspections (Last 6 Months)</h4>
+    <canvas id="inspectionVolumeChart" height="90"></canvas>
+  </div>
+
+  <div class="card">
+    <h4>Recent Activity</h4>
+    <div style="display:flex; flex-direction:column; gap:2px; max-height:300px; overflow-y:auto;">
+      {% for x in recent %}
+        <a href="{{ url_for('inspections.form9_edit', report_id=x.report.id) if x.form_type == 'form9' else url_for('inspections.generic_edit', form_type=x.form_type, report_id=x.report.id) }}"
+           style="display:flex; justify-content:space-between; align-items:center; padding:8px 6px; border-bottom:1px solid var(--border, #eee); text-decoration:none; color:inherit;">
+          <div>
+            <div style="font-size:12.5px; font-weight:600;">{{ x.form_label }} {{ 'edited' if x.edited else 'created' }}</div>
+            <div style="font-size:11px; color:var(--text-muted);">{{ x.company_name or 'Individual' }} &middot; {{ x.report.report_no }}</div>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); white-space:nowrap;">
+            {{ (x.report.updated_at or x.report.created_at).strftime('%d %b, %H:%M') if (x.report.updated_at or x.report.created_at) else '' }}
+          </div>
+        </a>
+      {% else %}
+        <div style="text-align:center; padding:24px; color:var(--text-muted);">No recent activity.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var rows = document.querySelectorAll('#trackerTable tbody tr[data-status]');
+  var pills = document.querySelectorAll('.tab-row .tab-pill');
+  var searchBox = document.getElementById('trackerSearch');
+  var activeFilter = 'all';
+
+  function applyFilters() {
+    var q = (searchBox.value || '').toLowerCase();
+    rows.forEach(function (row) {
+      var matchesFilter = activeFilter === 'all' || row.dataset.status === activeFilter;
+      var matchesSearch = !q || (row.dataset.search || '').toLowerCase().indexOf(q) !== -1;
+      row.style.display = (matchesFilter && matchesSearch) ? '' : 'none';
+    });
+  }
+
+  pills.forEach(function (pill) {
+    pill.style.cursor = 'pointer';
+    pill.addEventListener('click', function () {
+      pills.forEach(function (p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      activeFilter = pill.dataset.filter;
+      applyFilters();
+    });
+  });
+
+  if (searchBox) searchBox.addEventListener('input', applyFilters);
+
+  var months = {{ chart_months|tojson }};
+  var ctx = document.getElementById('inspectionVolumeChart');
+  if (ctx && window.Chart) {
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: months.map(function (m) { return m.label; }),
+        datasets: [{
+          label: 'Reports created',
+          data: months.map(function (m) { return m.count; }),
+          backgroundColor: 'rgba(15, 157, 113, 0.35)',
+          borderColor: '#0F9D71',
+          borderWidth: 1.5,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

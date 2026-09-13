@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Inspections{% endblock %}
+{% block breadcrumb_title %}{{ 'Edit' if report else 'New' }} {{ config.label }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ 'Edit' if report else 'New' }} {{ config.label }}</h4>
+    <a href="{{ url_for('inspections.generic_list', form_type=form_type) }}" class="btn btn-outline">Back to List</a>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <h4>Report Details</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Company (optional - auto-fills occupier &amp; address below)</label>
+        <select id="company_select" name="company_id" onchange="fillFromCompany(this)">
+          <option value="">-- Select a company --</option>
+          {% for c in companies %}
+            <option value="{{ c.id }}"
+              data-occupier="{{ c.occupier_name or '' }}"
+              data-address="{{ c.address or '' }}"
+              {% if report and report.company_id == c.id %}selected{% endif %}>
+              {{ c.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Report No. *</label>
+        <input type="text" name="report_no" required value="{{ report.report_no if report else suggested_report_no }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Date *</label>
+        <input type="date" name="date" required value="{{ report.report_date.isoformat() if report and report.report_date else today }}">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:3px;">Occupier Name</label>
+        <input type="text" id="occupier_name" name="occupier_name" value="{{ data.occupier_name or '' }}">
+      </div>
+      <div style="grid-column:span 2;">
+        <label style="display:block; margin-bottom:3px;">Address</label>
+        <input type="text" id="address" name="address" value="{{ data.address or '' }}">
+      </div>
+    </div>
+
+    {% for section_name, section_fields in config.sections %}
+    <h4>{{ section_name }}</h4>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      {% for key, label, input_type, default in section_fields %}
+      <div {% if input_type == 'textarea' %}style="grid-column:span 2;"{% endif %}>
+        <label style="display:block; margin-bottom:3px;">{{ label }}</label>
+        {% if input_type == 'textarea' %}
+          <textarea name="{{ key }}" rows="2">{{ data.get(key, default or '') }}</textarea>
+        {% elif input_type == 'date' %}
+          <input type="date" name="{{ key }}" value="{{ data.get(key, default or '') }}">
+        {% else %}
+          <input type="text" name="{{ key }}" value="{{ data.get(key, default or '') }}">
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <button class="btn btn-primary" type="submit">{{ 'Save Changes' if report else 'Create Report' }}</button>
+    <a class="btn btn-outline" href="{{ url_for('inspections.generic_list', form_type=form_type) }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function fillFromCompany(select) {
+    var opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return;
+
+    var map = {
+      occupier_name: opt.getAttribute('data-occupier'),
+      address: opt.getAttribute('data-address'),
+    };
+    Object.keys(map).forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (el && !el.value && map[fieldId]) {
+        el.value = map[fieldId];
+      }
+    });
+  }
+</script>
+{% endblock %}
