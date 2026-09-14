@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}Account{% endblock %}
+{% block breadcrumb_title %}My Profile{% endblock %}
+{% block content %}
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:20px;">
+
+  <div class="card">
+    <div class="toolbar">
+      <h4 style="margin:0;">My Profile</h4>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:22px;">
+      <div class="avatar" style="width:56px; height:56px; font-size:20px;">{{ current_user.name[0]|upper }}</div>
+      <div>
+        <div style="font-weight:700; font-size:16px;">{{ current_user.name }}</div>
+        <div class="text-muted" style="font-size:13px;">{{ current_user.role.name if current_user.role else ('Administrator' if current_user.is_admin else 'Employee') }}</div>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('auth.update_profile') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="margin-bottom:14px;">
+        <label style="display:block; margin-bottom:3px;">Full Name</label>
+        <input type="text" name="name" required value="{{ current_user.name }}">
+      </div>
+      <div style="margin-bottom:18px;">
+        <label style="display:block; margin-bottom:3px;">Email</label>
+        <input type="email" name="email" required value="{{ current_user.email }}">
+      </div>
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h4 style="margin:0;">Change Password</h4>
+    </div>
+    <form method="post" action="{{ url_for('auth.change_password') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="margin-bottom:14px;">
+        <label style="display:block; margin-bottom:3px;">Current Password</label>
+        <input type="password" name="current_password" required>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block; margin-bottom:3px;">New Password</label>
+        <input type="password" name="new_password" required minlength="6">
+      </div>
+      <div style="margin-bottom:18px;">
+        <label style="display:block; margin-bottom:3px;">Confirm New Password</label>
+        <input type="password" name="confirm_password" required minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary">Update Password</button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
