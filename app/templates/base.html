@@ -210,6 +210,10 @@
     </a>
 
     <div class="nav-section-label">Setting</div>
+    <a class="nav-item {% if request.path.startswith('/admin/my-company') %}active{% endif %}" href="{{ url_for('admin.my_company') }}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 21v-4a3 3 0 0 1 6 0v4"/></svg>
+      <span class="nav-label">My Company</span>
+    </a>
     <a class="nav-item {% if request.path.startswith('/admin/config') %}active{% endif %}" href="{{ url_for('admin.config_page') }}">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>
       <span class="nav-label">Config</span>

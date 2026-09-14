@@ -364,6 +364,29 @@ class EmailLog(db.Model):
     sent_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class CompanyProfile(db.Model):
+    """
+    Singleton row (there's only ever one) holding YOUR OWN organization's
+    identity for the "My Company" settings page -- logo, signature/stamp
+    images, and official contact details used on the org profile screen
+    and (eventually) on generated certificates/letterheads.
+
+    Not to be confused with Company above, which stores CLIENT companies
+    that get inspection reports issued to them.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    legal_name = db.Column(db.String(255))
+    tagline = db.Column(db.String(255))
+    email = db.Column(db.String(150))
+    phone = db.Column(db.String(50))
+    website = db.Column(db.String(255))
+    address = db.Column(db.Text)
+    logo_filename = db.Column(db.String(255))
+    signature_filename = db.Column(db.String(255))
+    stamp_filename = db.Column(db.String(255))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ConfigSetting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(100), unique=True, nullable=False)

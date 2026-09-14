@@ -1,14 +1,21 @@
 import os
+import shutil
+import sqlite3
+import zipfile
+from io import BytesIO
 from uuid import uuid4
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash, jsonify,
+    current_app, send_file,
+)
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 from app import db
 from app.models import (
     User, Role, Department, Lead, Estimation, Payment,
-    WorkStage, SiteVisit, Measurement, Engineer, ConfigSetting
+    WorkStage, SiteVisit, Measurement, Engineer, ConfigSetting, CompanyProfile
 )
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -687,3 +694,185 @@ def employees():
         "admin/employees.html",
         users=User.query.filter(User.is_admin == False).all(),
     )
+
+
+# ---------------------------------------------------------------------------
+# MY COMPANY (Organization Profile)
+# A singleton settings page for YOUR OWN org's branding/contact details,
+# plus a small database backup/restore panel underneath it.
+# ---------------------------------------------------------------------------
+def _get_or_create_company_profile():
+    profile = CompanyProfile.query.first()
+    if not profile:
+        profile = CompanyProfile(legal_name=current_app.config.get("COMPANY_NAME", ""))
+        db.session.add(profile)
+        db.session.commit()
+    return profile
+
+
+def _save_company_asset(file_obj, tag):
+    """Saves an uploaded logo/signature/stamp image under
+    static/uploads/company and returns the stored filename, or None if no
+    file was uploaded."""
+    if not file_obj or not file_obj.filename:
+        return None
+    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "company")
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(file_obj.filename)
+    stored_name = f"{tag}_{uuid4().hex}_{filename}"
+    file_obj.save(os.path.join(upload_dir, stored_name))
+    return stored_name
+
+
+def _backups_dir():
+    path = os.path.abspath(os.path.join(current_app.root_path, "..", "backups"))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _sqlite_db_path():
+    """Returns the on-disk path for the app's SQLite database, or None if
+    the app is configured for a different database engine (e.g. Postgres
+    on Render) -- the backup/restore tools below only support SQLite."""
+    db_uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+    if not db_uri.startswith("sqlite:///"):
+        return None
+    return db_uri.replace("sqlite:///", "", 1)
+
+
+def _build_backup_zip():
+    """Builds an in-memory ZIP containing a human-readable .sql dump and a
+    raw .backup binary copy of the current database. Returns
+    (BytesIO, timestamp) or (None, None) if backups aren't supported."""
+    db_path = _sqlite_db_path()
+    if not db_path or not os.path.exists(db_path):
+        return None, None
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        conn = sqlite3.connect(db_path)
+        sql_text = "\n".join(conn.iterdump())
+        conn.close()
+        zf.writestr(f"hse_backup_{timestamp}.sql", sql_text)
+        zf.write(db_path, arcname=f"hse_backup_{timestamp}.backup")
+    buffer.seek(0)
+    return buffer, timestamp
+
+
+@admin_bp.route("/my-company")
+@login_required
+@admin_required
+def my_company():
+    profile = _get_or_create_company_profile()
+    backup_dir = _backups_dir()
+    recent_backups = sorted(
+        (f for f in os.listdir(backup_dir) if f.endswith(".zip")), reverse=True
+    )[:5]
+    return render_template(
+        "admin/my_company.html", profile=profile, recent_backups=recent_backups
+    )
+
+
+@admin_bp.route("/my-company/update", methods=["POST"])
+@login_required
+@admin_required
+def update_my_company():
+    profile = _get_or_create_company_profile()
+    profile.legal_name = request.form.get("legal_name", "").strip() or profile.legal_name
+    profile.tagline = request.form.get("tagline", "").strip()
+    profile.email = request.form.get("email", "").strip()
+    profile.phone = request.form.get("phone", "").strip()
+    profile.website = request.form.get("website", "").strip()
+    profile.address = request.form.get("address", "").strip()
+
+    new_logo = _save_company_asset(request.files.get("logo"), "logo")
+    if new_logo:
+        profile.logo_filename = new_logo
+
+    new_signature = _save_company_asset(request.files.get("signature"), "signature")
+    if new_signature:
+        profile.signature_filename = new_signature
+
+    new_stamp = _save_company_asset(request.files.get("stamp"), "stamp")
+    if new_stamp:
+        profile.stamp_filename = new_stamp
+
+    db.session.commit()
+    flash("Organization profile updated.", "success")
+    return redirect(url_for("admin.my_company"))
+
+
+@admin_bp.route("/my-company/backup/download")
+@login_required
+@admin_required
+def download_backup():
+    buffer, timestamp = _build_backup_zip()
+    if not buffer:
+        flash("Backup is only supported for SQLite databases right now.", "danger")
+        return redirect(url_for("admin.my_company"))
+    return send_file(
+        buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"HSE-Backup-{timestamp}.zip",
+    )
+
+
+@admin_bp.route("/my-company/backup/run", methods=["POST"])
+@login_required
+@admin_required
+def run_auto_backup():
+    buffer, timestamp = _build_backup_zip()
+    if not buffer:
+        flash("Backup is only supported for SQLite databases right now.", "danger")
+        return redirect(url_for("admin.my_company"))
+
+    backup_dir = _backups_dir()
+    filename = f"HSE-Backup-{timestamp}.zip"
+    with open(os.path.join(backup_dir, filename), "wb") as f:
+        f.write(buffer.getvalue())
+
+    # Keep only the 10 most recent backups on disk so this folder doesn't
+    # grow forever.
+    backups = sorted(
+        (f for f in os.listdir(backup_dir) if f.endswith(".zip")), reverse=True
+    )
+    for old in backups[10:]:
+        os.remove(os.path.join(backup_dir, old))
+
+    flash(f"Backup saved on the server as {filename}.", "success")
+    return redirect(url_for("admin.my_company"))
+
+
+@admin_bp.route("/my-company/backup/restore", methods=["POST"])
+@login_required
+@admin_required
+def restore_backup():
+    db_path = _sqlite_db_path()
+    if not db_path:
+        flash("Restore is only supported for SQLite databases right now.", "danger")
+        return redirect(url_for("admin.my_company"))
+
+    file = request.files.get("backup_file")
+    if not file or not file.filename:
+        flash("Please choose a .backup file to restore.", "danger")
+        return redirect(url_for("admin.my_company"))
+
+    raw = file.read()
+    if not raw.startswith(b"SQLite format 3\x00"):
+        flash("That file doesn't look like a valid SQLite backup.", "danger")
+        return redirect(url_for("admin.my_company"))
+
+    # Snapshot the current db first, in case the restore needs undoing.
+    if os.path.exists(db_path):
+        safety_copy = db_path + f".before-restore-{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        shutil.copyfile(db_path, safety_copy)
+
+    db.session.remove()
+    db.engine.dispose()
+    with open(db_path, "wb") as f:
+        f.write(raw)
+
+    flash("Backup restored. Please restart the application for it to take full effect.", "success")
+    return redirect(url_for("admin.my_company"))
