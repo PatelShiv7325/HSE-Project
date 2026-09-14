@@ -57,6 +57,17 @@ def create_app():
 
     csrf.exempt(api_bp)
 
+    @app.route("/")
+    def index():
+        # Bare root URL (e.g. https://your-app.onrender.com/) had no route
+        # at all before, so it 404'd -- send people straight to login, or
+        # to the dashboard if they're already signed in.
+        from flask import redirect, url_for
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return redirect(url_for("admin.dashboard"))
+        return redirect(url_for("auth.login"))
+
     @app.context_processor
     def inject_company():
         return {
