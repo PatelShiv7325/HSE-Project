@@ -7,6 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 from io import BytesIO
+import re
 
 inspections_bp = Blueprint("inspections", __name__, url_prefix="/inspections")
 
@@ -840,7 +841,11 @@ def _build_excel_registry(form_type, reports, label):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = label[:31]  # Excel sheet-name length limit
+    # Excel sheet names can't contain \ / ? * [ ] or exceed 31 chars --
+    # form labels like "Form 10 - Lifting Machines / Cranes" have a slash,
+    # so strip anything invalid rather than let openpyxl reject it.
+    safe_title = re.sub(r'[\\/?*\[\]:]', '-', label)[:31]
+    ws.title = safe_title
 
     col_count = len(headers)
 

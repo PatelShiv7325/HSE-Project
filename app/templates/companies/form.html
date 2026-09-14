@@ -1,44 +1,76 @@
 {% extends "base.html" %}
 {% block breadcrumb_parent %}Companies{% endblock %}
-{% block breadcrumb_title %}{{ 'Edit' if company else 'New' }} Company{% endblock %}
+{% block breadcrumb_title %}{{ 'Edit' if company else 'Onboard' }}{% endblock %}
 {% block content %}
+<style>
+  .onboard-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .onboard-header h1 { margin:0 0 4px; font-size:26px; font-weight:800; letter-spacing:-.01em; }
+  .onboard-header p { margin:0; color:var(--text-muted); font-size:13.5px; }
+  .onboard-actions { display:flex; gap:10px; }
+  .onboard-actions .btn { display:inline-flex; align-items:center; gap:6px; }
+  .section-label { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--navy); padding-bottom:14px; margin-bottom:20px; border-bottom:1px solid var(--border, #eee); }
+  .field-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--text-muted); margin-bottom:6px; }
+  .field-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:16px 20px; margin-bottom:18px; }
+  .field-grid.cols-3 { grid-template-columns:repeat(3, 1fr); }
+  @media (max-width: 720px) { .field-grid, .field-grid.cols-3 { grid-template-columns:1fr; } }
+</style>
+
+<div class="card onboard-header">
+  <div>
+    <h1>{{ 'Edit Company' if company else 'Onboard New Company' }}</h1>
+    <p>{{ 'Update this entity\'s HSE compliance profile.' if company else 'Register entity for HSE compliance' }}</p>
+  </div>
+  <div class="onboard-actions">
+    <a href="{{ url_for('companies.list_companies') }}" class="btn btn-outline">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      Cancel
+    </a>
+    <button type="submit" form="companyForm" class="btn btn-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+      {{ 'Save Changes' if company else 'Create Company' }}
+    </button>
+  </div>
+</div>
+
 <div class="card">
-  <div class="toolbar">
-    <h4 style="margin:0;">{{ 'Edit Company' if company else 'New Company' }}</h4>
-    <a href="{{ url_for('companies.list_companies') }}" class="btn btn-outline">Back to List</a>
+  <div class="section-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"/></svg>
+    Legal Entity Profile
   </div>
 
-  <form method="post">
+  <form method="post" id="companyForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+    <div class="field-grid">
       <div>
-        <label style="display:block; margin-bottom:3px;">Company Name *</label>
-        <input type="text" name="name" required value="{{ company.name if company else '' }}">
+        <label class="field-label">Company Legal Name</label>
+        <input type="text" name="name" required placeholder="e.g. Reliance Industries Ltd." value="{{ company.name if company else '' }}">
       </div>
       <div>
-        <label style="display:block; margin-bottom:3px;">Occupier Name</label>
-        <input type="text" name="occupier_name" value="{{ company.occupier_name if company else '' }}">
-      </div>
-      <div style="grid-column:span 2;">
-        <label style="display:block; margin-bottom:3px;">Address</label>
-        <input type="text" name="address" value="{{ company.address if company else '' }}">
-      </div>
-      <div>
-        <label style="display:block; margin-bottom:3px;">Registration No.</label>
-        <input type="text" name="registration_no" value="{{ company.registration_no if company else '' }}">
-      </div>
-      <div>
-        <label style="display:block; margin-bottom:3px;">License No.</label>
-        <input type="text" name="license_no" value="{{ company.license_no if company else '' }}">
-      </div>
-      <div>
-        <label style="display:block; margin-bottom:3px;">Company Code / ID</label>
-        <input type="text" name="company_code" value="{{ company.company_code if company else '' }}">
+        <label class="field-label">Company ID</label>
+        <input type="text" name="company_code" placeholder="e.g. RIL" value="{{ company.company_code if company else '' }}">
       </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">{{ 'Save Changes' if company else 'Create Company' }}</button>
+    <div class="field-grid cols-3">
+      <div>
+        <label class="field-label">Occupier (or Owner)</label>
+        <input type="text" name="occupier_name" placeholder="Name of owner/occupier" value="{{ company.occupier_name if company else '' }}">
+      </div>
+      <div>
+        <label class="field-label">Registration Number (e.g. GFR)</label>
+        <input type="text" name="registration_no" placeholder="Enter registration no" value="{{ company.registration_no if company else '' }}">
+      </div>
+      <div>
+        <label class="field-label">License Number</label>
+        <input type="text" name="license_no" placeholder="Enter license no" value="{{ company.license_no if company else '' }}">
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Full Operational Address</label>
+      <textarea name="address" rows="4" placeholder="Enter complete office/site address...">{{ company.address if company else '' }}</textarea>
+    </div>
   </form>
 </div>
 {% endblock %}

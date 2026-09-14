@@ -1,3 +1,4 @@
+from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
@@ -30,12 +31,21 @@ FORM_TYPE_ENDPOINTS = {
 }
 
 
+SORT_COLUMNS = {
+    "name": Company.name,
+    "occupier": Company.occupier_name,
+    "created": Company.created_at,
+}
+
+
 @companies_bp.route("/")
 @login_required
 def list_companies():
     search = request.args.get("q", "").strip()
     per_page = request.args.get("per_page", 10, type=int)
     page = request.args.get("page", 1, type=int)
+    sort = request.args.get("sort", "name")
+    direction = request.args.get("dir", "asc")
 
     query = Company.query
     if search:
@@ -47,7 +57,9 @@ def list_companies():
                 Company.license_no.ilike(f"%{search}%"),
             )
         )
-    query = query.order_by(Company.name.asc())
+
+    sort_col = SORT_COLUMNS.get(sort, Company.name)
+    query = query.order_by(sort_col.desc() if direction == "desc" else sort_col.asc())
 
     total = query.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -57,10 +69,33 @@ def list_companies():
     start = 0 if total == 0 else (page - 1) * per_page + 1
     end = min(page * per_page, total)
 
+    # Registry-wide stats for the top cards -- deliberately unfiltered
+    # (whole network), unlike `total` above which reflects the search box.
+    total_companies = Company.query.count()
+    all_reports = InspectionReport.query.all()
+    total_reports_count = len(all_reports)
+
+    if total_reports_count:
+        # Import kept local to avoid a module-load-order cycle between the
+        # inspections and companies blueprints -- this is the same
+        # due-date resolver the Compliance Dashboard uses, so this figure
+        # always agrees with what that page reports.
+        from app.inspections.routes import _report_due_date
+        overdue = sum(
+            1 for r in all_reports
+            if (_report_due_date(r) or date.max) < date.today()
+        )
+        compliance_pct = round((total_reports_count - overdue) / total_reports_count * 100)
+    else:
+        compliance_pct = 100
+
     return render_template(
         "companies/list.html",
         companies=companies, search=search, per_page=per_page,
         page=page, total_pages=total_pages, total=total, start=start, end=end,
+        sort=sort, direction=direction,
+        total_companies=total_companies, total_reports_count=total_reports_count,
+        compliance_pct=compliance_pct,
     )
 
 
