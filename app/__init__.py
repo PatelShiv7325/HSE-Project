@@ -144,13 +144,17 @@ def _ensure_schema_upgrades():
 
     Add a new "table_name": {...} entry any time a future field gets added
     to a table that may already have rows in it.
-    """
-    import sqlite3
-    import os
 
-    db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hse.db")
-    if not os.path.exists(db_path):
-        return
+    IMPORTANT: this talks to `db.engine` (whatever SQLALCHEMY_DATABASE_URI
+    actually is -- SQLite locally, PostgreSQL on Render) via SQLAlchemy's
+    own dialect-agnostic inspector, instead of hardcoding a raw sqlite3
+    connection to a local hse.db file. The old sqlite3-only version silently
+    no-op'd on any deploy using Postgres (the file it looked for simply
+    doesn't exist in that container), which meant company_id/renewed_from_id
+    never actually got added to the live Postgres table -- every page that
+    queried InspectionReport then 500'd with "column ... does not exist".
+    """
+    from sqlalchemy import inspect, text
 
     # table name -> { new column name: SQL column definition }
     tables_to_upgrade = {
@@ -180,23 +184,17 @@ def _ensure_schema_upgrades():
         },
     }
 
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
+    inspector = inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
 
-    for table_name, columns in tables_to_upgrade.items():
-        # Skip tables that don't exist yet -- nothing to upgrade on them
-        cur.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,)
-        )
-        if not cur.fetchone():
-            continue
+    with db.engine.begin() as conn:
+        for table_name, columns in tables_to_upgrade.items():
+            # Skip tables that don't exist yet -- nothing to upgrade on them
+            if table_name not in existing_tables:
+                continue
 
-        cur.execute(f"PRAGMA table_info({table_name})")
-        existing_columns = {row[1] for row in cur.fetchall()}
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
 
-        for column_name, column_def in columns.items():
-            if column_name not in existing_columns:
-                cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
-                conn.commit()
-
-    conn.close()
+            for column_name, column_def in columns.items():
+                if column_name not in existing_columns:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
