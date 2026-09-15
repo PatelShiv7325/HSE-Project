@@ -182,6 +182,57 @@ def _ensure_schema_upgrades():
             "company_id": "INTEGER",
             "renewed_from_id": "INTEGER",
         },
+        # These four "*_case" tables (DISH/BAUDA/GIDC/TPO workflow tracking)
+        # had columns added to their models over time that were never added
+        # here -- every column below is listed so any older local/production
+        # copy of these tables gets fully caught up in one pass, regardless
+        # of exactly which columns it's missing.
+        "dish_case": {
+            "map_status": "VARCHAR(30) DEFAULT 'new'",
+            "documentation_user_id": "INTEGER",
+            "stability_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "drafting_deadline": "DATE",
+            "online_application_user_id": "INTEGER",
+            "liaisoning_map_user_id": "INTEGER",
+            "license_user_id": "INTEGER",
+            "liaisoning_license_user_id": "INTEGER",
+            "form_status": "VARCHAR(20) DEFAULT 'pending'",
+            "drafting_status": "VARCHAR(30) DEFAULT 'file_upload_pending'",
+            "map_portal_id": "VARCHAR(120)",
+            "map_portal_password": "VARCHAR(120)",
+            "map_application_status": "VARCHAR(20) DEFAULT 'online_pending'",
+            "liaisoning_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
+            "stability_type": "VARCHAR(10)",
+            "stability_status": "VARCHAR(20) DEFAULT 'pending'",
+            "stability_structure_filename": "VARCHAR(255)",
+            "stability_certificate_filename": "VARCHAR(255)",
+            "stability_review_sent_at": "DATETIME",
+            "license_type": "VARCHAR(10)",
+            "license_portal_id": "VARCHAR(120)",
+            "license_portal_password": "VARCHAR(120)",
+            "license_status": "VARCHAR(20) DEFAULT 'online_pending'",
+        },
+        "bauda_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "form_status": "VARCHAR(20) DEFAULT 'pending'",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
+            "approved_status": "VARCHAR(20) DEFAULT 'pending'",
+        },
+        "gidc_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
+        },
+        "tpo_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
+        },
     }
 
     inspector = inspect(db.engine)

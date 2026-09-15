@@ -217,6 +217,9 @@ class DishCase(db.Model):
 
     stability_type = db.Column(db.String(10))  # new, renew
     stability_status = db.Column(db.String(20), default="pending")  # pending, done
+    stability_structure_filename = db.Column(db.String(255))
+    stability_certificate_filename = db.Column(db.String(255))
+    stability_review_sent_at = db.Column(db.DateTime)
 
     license_type = db.Column(db.String(10))  # new, renew
     license_portal_id = db.Column(db.String(120))

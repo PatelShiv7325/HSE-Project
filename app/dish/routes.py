@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+import os
+from uuid import uuid4
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash,
+    current_app, send_from_directory,
+)
 from flask_login import login_required
+from werkzeug.utils import secure_filename
 from app import db
 from app.models import DishCase, DishApplication, Lead, User
 
@@ -18,7 +24,12 @@ DUE_DAYS = {"map": 45, "stability": 30, "license": 45}
 MAP_APP_STATUS_LABELS = {"online_pending": "Online Application Pending", "offline_pending": "Offline Application Pending", "submitted": "Submitted"}
 LIAISONING_LABELS = {"regional_forward_pending": "Regional Office Forward Pending", "regional_approval_pending": "Regional Office Approval Pending", "query": "Inward Letter Query", "hard_copy_pending": "Hard Copy Upload Pending", "done": "Done"}
 STABILITY_LABELS = {"pending": "Pending", "done": "Done"}
-LICENSE_LABELS = {"online_pending": "Online Application Pending", "submitted": "Submitted"}
+LICENSE_LABELS = {
+    "online_pending": "Online Application Pending",
+    "offline_pending": "Offline Application Pending",
+    "query": "Inward Letter Query",
+    "submitted": "Submitted",
+}
 
 
 def application_status_label(app):
@@ -49,7 +60,13 @@ def application_status_pill(app):
     if app.application_type == "stability":
         return "done" if case.stability_status == "done" else "pending"
     if app.application_type == "license":
-        return "done" if case.license_status == "submitted" else "pending"
+        if case.license_status == "submitted":
+            return "done"
+        if case.license_status == "query":
+            return "overdue"
+        if case.license_status == "offline_pending":
+            return "in_progress"
+        return "pending"
     return "pending"
 
 
@@ -299,6 +316,32 @@ def update_application_status(app_id):
 
 MAP_STATUS_LABELS = {"new": "New", "revised": "Revised", "revised_with_extension": "Revised With Extension", "not_in_scope": "Not In Scope"}
 
+# Pill CSS class (from theme.css .status-pill variants) for each
+# liaisoning_status value -- reuses the LIAISONING_LABELS text defined near
+# the top of this file so the wording stays consistent with the
+# Applications Dashboard's status column.
+LIAISONING_STATUS_PILL = {
+    "regional_forward_pending": "assigned",
+    "regional_approval_pending": "assigned",
+    "query": "overdue",
+    "hard_copy_pending": "pending",
+    "done": "done",
+}
+LIAISONING_STATUS_CHOICES = [
+    (value, LIAISONING_LABELS[value], LIAISONING_STATUS_PILL[value])
+    for value in LIAISONING_LABELS
+]
+# What "Application Forwarded" moves a case to, based on its current
+# status. A query is assumed resolved and sent back into approval once
+# forwarded again. Adjust this mapping if your actual workflow differs.
+LIAISONING_PROGRESSION = {
+    "regional_forward_pending": "regional_approval_pending",
+    "regional_approval_pending": "hard_copy_pending",
+    "query": "regional_approval_pending",
+    "hard_copy_pending": "done",
+    "done": "done",
+}
+
 
 @dish_bp.route("/applications")
 @login_required
@@ -351,19 +394,264 @@ def mark_application_submitted(case_id):
 @dish_bp.route("/liaisoning-of-applications")
 @login_required
 def liaisoning_applications():
-    return render_template("dish/coming_soon.html", title="Liaisoning of Applications")
+    search = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(Lead.company_name.ilike(f"%{search}%"))
+    if status_filter:
+        query = query.filter(DishCase.liaisoning_status == status_filter)
+    query = query.order_by(DishCase.lead_id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/liaisoning_applications.html",
+        cases=cases, search=search, status_filter=status_filter,
+        per_page=per_page, page=page, total_pages=total_pages,
+        total=total, start=start, end=end,
+        status_choices=LIAISONING_STATUS_CHOICES,
+        status_labels=LIAISONING_LABELS,
+        status_pill=LIAISONING_STATUS_PILL,
+        map_labels=MAP_STATUS_LABELS,
+    )
+
+
+@dish_bp.route("/liaisoning-of-applications/<int:case_id>/query", methods=["POST"])
+@login_required
+def liaisoning_mark_query(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.liaisoning_status = "query"
+    db.session.commit()
+    flash(f"Marked '{case.lead.company_name}' as a Regional Office Query.", "success")
+    return redirect(request.referrer or url_for("dish.liaisoning_applications"))
+
+
+@dish_bp.route("/liaisoning-of-applications/<int:case_id>/forward", methods=["POST"])
+@login_required
+def liaisoning_mark_forwarded(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.liaisoning_status = LIAISONING_PROGRESSION.get(case.liaisoning_status, "done")
+    db.session.commit()
+    flash(
+        f"'{case.lead.company_name}' moved to "
+        f"{LIAISONING_LABELS[case.liaisoning_status]}.", "success"
+    )
+    return redirect(request.referrer or url_for("dish.liaisoning_applications"))
+
+
+@dish_bp.route("/liaisoning-of-applications/officer-dashboard")
+@login_required
+def liaisoning_officer_dashboard():
+    # Stubbed out for now -- wire this up to a real officer-facing view
+    # when that workflow is ready.
+    return render_template("dish/coming_soon.html", title="Officer Dashboard")
+
+
+STABILITY_TYPE_LABELS = {"new": "New", "renew": "Renew"}
+STABILITY_STATUS_LABELS = {"pending": "Pending", "done": "Complete"}
+
+
+def _save_stability_file(file_obj, case_id, tag):
+    """Saves an uploaded stability structure/certificate document under
+    static/uploads/stability and returns the stored filename, or None if
+    no file was chosen."""
+    if not file_obj or not file_obj.filename:
+        return None
+    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "stability")
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(file_obj.filename)
+    stored_name = f"{tag}_{case_id}_{uuid4().hex}_{filename}"
+    file_obj.save(os.path.join(upload_dir, stored_name))
+    return stored_name
 
 
 @dish_bp.route("/certificates")
 @login_required
 def certificates():
-    return render_template("dish/coming_soon.html", title="Certificates")
+    search = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                Lead.client_name.ilike(f"%{search}%"),
+                Lead.contact_no.ilike(f"%{search}%"),
+            )
+        )
+    if status_filter:
+        query = query.filter(DishCase.stability_status == status_filter)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/certificates.html",
+        cases=cases, search=search, status=status_filter, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+        type_labels=STABILITY_TYPE_LABELS, status_labels=STABILITY_STATUS_LABELS,
+    )
+
+
+@dish_bp.route("/certificates/<int:case_id>/details", methods=["GET", "POST"])
+@login_required
+def certificate_details(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        stability_type = request.form.get("stability_type")
+        stability_status = request.form.get("stability_status")
+        if stability_type in ("new", "renew"):
+            case.stability_type = stability_type
+        if stability_status in ("pending", "done"):
+            case.stability_status = stability_status
+        db.session.commit()
+        flash("Stability certificate details updated.", "success")
+        return redirect(url_for("dish.certificates"))
+    return render_template("dish/certificate_details.html", case=case)
+
+
+@dish_bp.route("/certificates/<int:case_id>/structure", methods=["GET", "POST"])
+@login_required
+def certificate_structure(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        stored = _save_stability_file(request.files.get("document"), case_id, "structure")
+        if stored:
+            case.stability_structure_filename = stored
+            db.session.commit()
+            flash("Stability structure document uploaded.", "success")
+        else:
+            flash("Please choose a file to upload.", "danger")
+        return redirect(url_for("dish.certificate_structure", case_id=case_id))
+    return render_template(
+        "dish/certificate_file.html", case=case, doc_type="structure",
+        title="Stability Structure", filename=case.stability_structure_filename,
+    )
+
+
+@dish_bp.route("/certificates/<int:case_id>/certificate", methods=["GET", "POST"])
+@login_required
+def certificate_file(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        stored = _save_stability_file(request.files.get("document"), case_id, "certificate")
+        if stored:
+            case.stability_certificate_filename = stored
+            case.stability_status = "done"
+            db.session.commit()
+            flash("Certificate uploaded and case marked Complete.", "success")
+        else:
+            flash("Please choose a file to upload.", "danger")
+        return redirect(url_for("dish.certificate_file", case_id=case_id))
+    return render_template(
+        "dish/certificate_file.html", case=case, doc_type="certificate",
+        title="Certificate", filename=case.stability_certificate_filename,
+    )
+
+
+@dish_bp.route("/certificates/uploads/<path:filename>")
+@login_required
+def certificate_download(filename):
+    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "stability")
+    return send_from_directory(upload_dir, filename)
+
+
+@dish_bp.route("/certificates/<int:case_id>/send-review", methods=["POST"])
+@login_required
+def certificate_send_review(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.stability_review_sent_at = datetime.utcnow()
+    db.session.commit()
+    # NOTE: this only records that a review was sent -- there's no client
+    # email address stored on Lead yet, so it doesn't actually send an
+    # email. Add an email column to Lead and wire this into
+    # email_service.send_email(...) if you want a real send here.
+    who = case.lead.client_name or case.lead.company_name if case.lead else "the client"
+    flash(f"Marked as sent for review to {who}.", "success")
+    return redirect(request.referrer or url_for("dish.certificates"))
 
 
 @dish_bp.route("/license")
 @login_required
 def license_page():
-    return render_template("dish/coming_soon.html", title="License")
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                DishCase.license_portal_id.ilike(f"%{search}%"),
+            )
+        )
+    if status in ("online_pending", "offline_pending", "query", "submitted"):
+        query = query.filter(DishCase.license_status == status)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/license.html",
+        cases=cases, search=search, status=status, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+        license_type_labels={"new": "NEW", "renew": "RENEW"},
+    )
+
+
+@dish_bp.route("/license/<int:case_id>/details", methods=["GET", "POST"])
+@login_required
+def license_details(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        license_type = request.form.get("license_type")
+        if license_type in ("new", "renew"):
+            case.license_type = license_type
+        case.license_portal_id = request.form.get("license_portal_id", "").strip()
+        case.license_portal_password = request.form.get("license_portal_password", "").strip()
+        new_status = request.form.get("license_status")
+        if new_status in ("online_pending", "offline_pending", "query", "submitted"):
+            case.license_status = new_status
+        db.session.commit()
+        flash("License details updated.", "success")
+        return redirect(url_for("dish.license_page"))
+    return render_template("dish/license_details.html", case=case)
+
+
+@dish_bp.route("/license/<int:case_id>/submit", methods=["POST"])
+@login_required
+def mark_license_submitted(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.license_status = "submitted"
+    db.session.commit()
+    flash(f"License application marked as submitted for '{case.lead.company_name}'.", "success")
+    return redirect(request.referrer or url_for("dish.license_page"))
 
 
 @dish_bp.route("/liaisoning-of-license")
