@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -242,6 +242,20 @@ class DishDocument(db.Model):
     dish_case_id = db.Column(db.Integer, db.ForeignKey("dish_case.id"), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     uploaded = db.Column(db.Boolean, default=False)
+
+
+class DishApplication(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    dish_case_id = db.Column(db.Integer, db.ForeignKey("dish_case.id"), nullable=False)
+    application_type = db.Column(db.String(20), nullable=False)   # map, stability, license
+    subtype = db.Column(db.String(30), nullable=False)            # new, revised, revised_with_extension, renew
+    application_no = db.Column(db.String(60), unique=True, nullable=False)
+    work_order_date = db.Column(db.Date, nullable=False)
+    due_date = db.Column(db.Date)
+    application_status = db.Column(db.String(20), default="pending")  # pending, approved, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    case = db.relationship("DishCase", backref="applications")
 
 
 class BaudaCase(db.Model):

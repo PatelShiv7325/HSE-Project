@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Form{% endblock %}
+{% block content %}
+<style>
+  .form-table-filter { margin-bottom: 16px; max-width: 260px; }
+  .addr-cell { display:flex; align-items:flex-start; gap:5px; color:var(--text-muted); }
+  .addr-cell svg { flex-shrink:0; margin-top:2px; }
+  .icon-edit-btn { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; padding:0; color:var(--warning); border-color:var(--warning-bg); background:var(--warning-bg); }
+</style>
+
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Form Table</h4>
+  </div>
+
+  <form method="get" class="form-table-filter">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Select Status Type</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All Statuses</option>
+      <option value="pending" {% if status == 'pending' %}selected{% endif %}>Company Pending</option>
+      <option value="done" {% if status == 'done' %}selected{% endif %}>Company Done</option>
+    </select>
+    <input type="hidden" name="q" value="{{ search }}">
+    <input type="hidden" name="per_page" value="{{ per_page }}">
+  </form>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <input type="hidden" name="status" value="{{ status }}">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Company, client or contact no." onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th>
+          <th>Company Name</th>
+          <th>Company Address</th>
+          <th>Client Name</th>
+          <th>Contact No.</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c.lead_id }}</td>
+          <td style="font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</td>
+          <td>
+            <div class="addr-cell">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              <span>{{ (c.lead.company_address or '-') if c.lead else '-' }}</span>
+            </div>
+          </td>
+          <td>{{ c.lead.client_name if c.lead else '-' }}</td>
+          <td>{{ c.lead.contact_no if c.lead else '-' }}</td>
+          <td>
+            <span class="status-pill {{ 'done' if c.form_status == 'done' else 'pending' }}">
+              {{ 'COMPANY DONE' if c.form_status == 'done' else 'COMPANY PENDING' }}
+            </span>
+          </td>
+          <td>
+            <a class="btn btn-outline icon-edit-btn" href="{{ url_for('dish.form_edit', case_id=c.id) }}" title="Update status">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No DISH form cases found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page, 'status': status} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.form', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.form', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.form', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

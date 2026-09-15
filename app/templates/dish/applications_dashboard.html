@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Dish Applications{% endblock %}
+{% block content %}
+<style>
+  .icon-badge { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .stat-card-flex { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .app-search { max-width:340px; flex:1; }
+  .app-table-cell-company { font-weight:600; color:var(--navy); }
+  .app-table-cell-no { color:var(--primary); font-weight:600; font-size:12.5px; display:block; margin-bottom:2px; }
+  .new-app-details { margin-bottom:16px; }
+  .new-app-details summary { cursor:pointer; font-weight:700; color:var(--primary); font-size:13px; list-style:none; }
+  .new-app-details summary::-webkit-details-marker { display:none; }
+  .new-app-form { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:12px; padding:14px; background:var(--surface-alt, #F7F9FC); border-radius:8px; }
+  .new-app-form label { font-size:12px; color:var(--text-muted); display:block; margin-bottom:3px; }
+</style>
+
+<!-- Stat cards -->
+<div class="stat-grid">
+  <div class="card stat-card">
+    <div class="stat-card-flex">
+      <div><div class="label">Total Applications</div><div class="value">{{ total_applications }}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">All Time</div></div>
+      <div class="icon-badge" style="background:var(--info-bg); color:var(--info);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-card-flex">
+      <div><div class="label">Due This Month</div><div class="value">{{ due_this_month }}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">This Month</div></div>
+      <div class="icon-badge" style="background:var(--warning-bg); color:var(--warning);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="card stat-card accent-danger">
+    <div class="stat-card-flex">
+      <div><div class="label">Overdue</div><div class="value danger">{{ overdue }}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Pending Overdue</div></div>
+      <div class="icon-badge" style="background:var(--danger-bg); color:var(--danger);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="card stat-card accent-success">
+    <div class="stat-card-flex">
+      <div><div class="label">Approved</div><div class="value success">{{ approved }}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Completed</div></div>
+      <div class="icon-badge" style="background:var(--success-bg); color:var(--success);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 6v6c0 5 4 8 9 10 5-2 9-5 9-10V6Z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-card-flex">
+      <div><div class="label">Pending</div><div class="value">{{ pending_on_track }}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">In Progress</div></div>
+      <div class="icon-badge" style="background:var(--info-bg); color:var(--info);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l6 3"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="chart-grid" style="grid-template-columns: 2fr 1fr;">
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:6px;">
+      <h4 style="margin:0;">Web Applications</h4>
+    </div>
+
+    <details class="new-app-details">
+      <summary>+ New Application</summary>
+      <form method="post" action="{{ url_for('dish.create_application') }}" class="new-app-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label>Case (Company)</label>
+          <select name="dish_case_id" required>
+            <option value="">Select company</option>
+            {% for c in cases %}<option value="{{ c.id }}">{{ c.lead.company_name if c.lead else '-' }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Type</label>
+          <select name="application_type" id="appTypeSelect" required onchange="filterSubtypes()">
+            <option value="">Select type</option>
+            <option value="map">MAP</option>
+            <option value="stability">Stability</option>
+            <option value="license">License</option>
+          </select>
+        </div>
+        <div>
+          <label>Subtype</label>
+          <select name="subtype" id="appSubtypeSelect" required>
+            <option value="" data-for="map,stability,license">Select subtype</option>
+            <option value="new" data-for="map,stability,license">New</option>
+            <option value="revised" data-for="map">Revised</option>
+            <option value="revised_with_extension" data-for="map">Revised with Extension</option>
+            <option value="renew" data-for="stability,license">Renew</option>
+          </select>
+        </div>
+        <div>
+          <label>Work Order Date</label>
+          <input type="date" name="work_order_date" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Create</button>
+      </form>
+    </details>
+
+    <div class="tab-row">
+      {% set tabs = [('all','All'), ('new','New'), ('revised','Revised'), ('revised_ext','Revised with Ext.'), ('map','Map'), ('stability','Stability'), ('license','License'), ('approved','Approved'), ('rejected','Rejected')] %}
+      {% for key, label in tabs %}
+        <a class="tab-pill {{ 'active' if tab == key else '' }}" href="{{ url_for('dish.dish_applications', tab=key, q=search, sort=sort) }}" style="text-decoration:none;">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="text" name="q" value="{{ search }}" class="app-search" placeholder="Search by company or application no..." onchange="this.form.submit()">
+      <select name="sort" onchange="this.form.submit()">
+        <option value="default" {% if sort == 'default' %}selected{% endif %}>Sort: Default (Pending First)</option>
+        <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Sort: Due Date (Asc)</option>
+        <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Sort: Due Date (Desc)</option>
+        <option value="applied_desc" {% if sort == 'applied_desc' %}selected{% endif %}>Sort: Applied Date (Desc)</option>
+        <option value="company" {% if sort == 'company' %}selected{% endif %}>Sort: Company Name</option>
+      </select>
+    </form>
+
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Application No. & Company</th>
+            <th>Status</th>
+            <th>Work Order Date</th>
+            <th>Due Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for a in applications %}
+          <tr>
+            <td>
+              <span class="app-table-cell-no">{{ a.application_no }}</span>
+              <span class="app-table-cell-company">{{ a.case.lead.company_name if a.case and a.case.lead else '-' }}</span>
+            </td>
+            <td><span class="status-pill {{ status_pill(a) }}">{{ status_label(a) }}</span></td>
+            <td>{{ a.work_order_date.strftime('%d %b %Y') if a.work_order_date else '-' }}</td>
+            <td style="{{ 'color:var(--danger); font-weight:700;' if a.due_date and a.due_date < today and a.application_status == 'pending' else '' }}">
+              {{ a.due_date.strftime('%d %b %Y') if a.due_date else '-' }}
+            </td>
+            <td>
+              <form method="post" action="{{ url_for('dish.update_application_status', app_id=a.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <select name="application_status" onchange="this.form.submit()" style="font-size:12px; padding:4px 6px;">
+                  <option value="pending" {% if a.application_status == 'pending' %}selected{% endif %}>Pending</option>
+                  <option value="approved" {% if a.application_status == 'approved' %}selected{% endif %}>Approved</option>
+                  <option value="rejected" {% if a.application_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                </select>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="text-muted" style="text-align:center; padding:24px;">No applications found.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card">
+      <h4>Application Status Overview</h4>
+      <canvas id="dishAppStatusChart" height="180"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:10px;">
+        <h4 style="margin:0;">Upcoming Due Dates</h4>
+        <a href="{{ url_for('dish.dish_applications', tab='all', sort='due_asc') }}" style="font-size:12.5px; font-weight:700;">View All</a>
+      </div>
+      {% for a in upcoming %}
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 0; {% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="icon-badge" style="width:30px; height:30px; background:var(--info-bg); color:var(--info);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:12.5px;">{{ a.case.lead.company_name if a.case and a.case.lead else '-' }}</div>
+              <div style="font-size:11px; color:var(--text-muted);">{{ a.application_no }}</div>
+            </div>
+          </div>
+          <span class="status-pill overdue">{{ a.due_date.strftime('%d %b %Y') }}</span>
+        </div>
+      {% else %}
+        <div class="text-muted" style="font-size:12.5px; padding:10px 0;">No upcoming due dates.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterSubtypes() {
+  const type = document.getElementById('appTypeSelect').value;
+  const subtypeSelect = document.getElementById('appSubtypeSelect');
+  [...subtypeSelect.options].forEach(opt => {
+    const allowed = (opt.dataset.for || '').split(',');
+    opt.hidden = type && !allowed.includes(type);
+  });
+  subtypeSelect.value = '';
+}
+
+new Chart(document.getElementById('dishAppStatusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Approved', 'Pending', 'Rejected', 'Overdue'],
+    datasets: [{
+      data: [{{ approved }}, {{ pending_on_track }}, {{ rejected }}, {{ overdue }}],
+      backgroundColor: ['#17845B', '#1657C7', '#B7791F', '#D92D20'],
+      borderWidth: 0,
+    }],
+  },
+  options: {
+    cutout: '68%',
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 11 } } } },
+  },
+});
+</script>
+{% endblock %}

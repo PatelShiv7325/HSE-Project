@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Applications{% endblock %}
+{% block content %}
+<style>
+  .apps-table-filter { margin-bottom: 16px; max-width: 260px; }
+  .portal-cell { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .btn-print { background: var(--warning); border-color: var(--warning); color: #fff; }
+  .btn-submit { background: var(--success); border-color: var(--success); color: #fff; }
+</style>
+
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Applications Table</h4>
+  </div>
+
+  <form method="get" class="apps-table-filter">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Select Status Type</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      <option value="online_pending" {% if status == 'online_pending' %}selected{% endif %}>Online Application Pending</option>
+      <option value="offline_pending" {% if status == 'offline_pending' %}selected{% endif %}>Offline Application Pending</option>
+      <option value="query" {% if status == 'query' %}selected{% endif %}>Inward Letter Query</option>
+    </select>
+    <input type="hidden" name="q" value="{{ search }}">
+    <input type="hidden" name="per_page" value="{{ per_page }}">
+  </form>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <input type="hidden" name="status" value="{{ status }}">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Company or portal ID" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th>
+          <th>Company Name</th>
+          <th>Portal ID / Password</th>
+          <th>MAP</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c.lead_id }}</td>
+          <td style="font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</td>
+          <td class="portal-cell">
+            {% if c.map_portal_id %}ID :- {{ c.map_portal_id }}<br>{% endif %}
+            {% if c.map_portal_password %}Password :- {{ c.map_portal_password }}{% endif %}
+          </td>
+          <td>{{ map_status_labels.get(c.map_status, c.map_status or '-')|upper }}</td>
+          <td>
+            {% if c.map_application_status == 'submitted' %}
+              <span class="status-pill done">SUBMITTED</span>
+            {% elif c.map_application_status == 'offline_pending' %}
+              <span class="status-pill in_progress">OFFLINE APPLICATION PENDING</span>
+            {% else %}
+              <span class="status-pill pending">ONLINE APPLICATION PENDING</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            {% if c.map_application_status == 'submitted' %}
+              <span class="text-muted" style="font-size:12px;">-</span>
+            {% elif c.map_application_status == 'offline_pending' %}
+              <form method="post" action="{{ url_for('dish.mark_application_submitted', case_id=c.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="per_page" value="{{ per_page }}">
+                <button class="btn btn-submit" type="submit">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                  Inward Letter
+                </button>
+              </form>
+            {% else %}
+              <button class="btn btn-print" type="button" onclick="window.print()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Print
+              </button>
+              <form method="post" action="{{ url_for('dish.mark_application_submitted', case_id=c.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="per_page" value="{{ per_page }}">
+                <button class="btn btn-submit" type="submit">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                  Application Submitted
+                </button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:24px;">No DISH applications found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page, 'status': status} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.applications', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.applications', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.applications', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

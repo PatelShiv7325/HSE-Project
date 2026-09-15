@@ -1,9 +1,62 @@
+from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
-from app.models import DishCase, Lead, User
+from app.models import DishCase, DishApplication, Lead, User
 
 dish_bp = Blueprint("dish", __name__, url_prefix="/dish")
+
+# ---------------------------------------------------------------------------
+# DISH Applications config
+# ---------------------------------------------------------------------------
+APP_TYPE_LABELS = {"map": "MAP", "stability": "STAB", "license": "LICENSE"}
+SUBTYPE_LABELS = {
+    "new": "NEW", "revised": "REV", "revised_with_extension": "REV. WITH EXT.", "renew": "RENEW",
+}
+DUE_DAYS = {"map": 45, "stability": 30, "license": 45}
+
+MAP_APP_STATUS_LABELS = {"online_pending": "Online Application Pending", "offline_pending": "Offline Application Pending", "submitted": "Submitted"}
+LIAISONING_LABELS = {"regional_forward_pending": "Regional Office Forward Pending", "regional_approval_pending": "Regional Office Approval Pending", "query": "Inward Letter Query", "hard_copy_pending": "Hard Copy Upload Pending", "done": "Done"}
+STABILITY_LABELS = {"pending": "Pending", "done": "Done"}
+LICENSE_LABELS = {"online_pending": "Online Application Pending", "submitted": "Submitted"}
+
+
+def application_status_label(app):
+    """Live status text for an application, pulled from its case's current pipeline status."""
+    case = app.case
+    if app.application_type == "map":
+        if case.map_application_status != "submitted":
+            return "MAP: " + MAP_APP_STATUS_LABELS.get(case.map_application_status, case.map_application_status or "-")
+        return "MAP: " + LIAISONING_LABELS.get(case.liaisoning_status, case.liaisoning_status or "-")
+    if app.application_type == "stability":
+        return "STABILITY: " + STABILITY_LABELS.get(case.stability_status, case.stability_status or "-")
+    if app.application_type == "license":
+        return "LICENSE: " + LICENSE_LABELS.get(case.license_status, case.license_status or "-")
+    return "-"
+
+
+def application_status_pill(app):
+    """CSS pill class for the live status (reuses the existing .status-pill variants)."""
+    case = app.case
+    if app.application_type == "map":
+        if case.map_application_status != "submitted":
+            return "pending"
+        if case.liaisoning_status == "query":
+            return "overdue"
+        if case.liaisoning_status == "done":
+            return "done"
+        return "in_progress"
+    if app.application_type == "stability":
+        return "done" if case.stability_status == "done" else "pending"
+    if app.application_type == "license":
+        return "done" if case.license_status == "submitted" else "pending"
+    return "pending"
+
+
+def generate_application_no(application_type, subtype):
+    year = datetime.utcnow().year
+    count = DishApplication.query.filter_by(application_type=application_type, subtype=subtype).count() + 1
+    return f"{APP_TYPE_LABELS[application_type]}/{SUBTYPE_LABELS[subtype]}/{year}/{count:03d}"
 
 
 @dish_bp.route("/assign")
@@ -68,7 +121,51 @@ def update_assignment(case_id):
 @dish_bp.route("/form")
 @login_required
 def form():
-    return render_template("dish/coming_soon.html", title="Form")
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                Lead.client_name.ilike(f"%{search}%"),
+                Lead.contact_no.ilike(f"%{search}%"),
+            )
+        )
+    if status:
+        query = query.filter(DishCase.form_status == status)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/form.html",
+        cases=cases, search=search, status=status, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+    )
+
+
+@dish_bp.route("/form/<int:case_id>/edit", methods=["GET", "POST"])
+@login_required
+def form_edit(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        new_status = request.form.get("form_status")
+        if new_status in ("pending", "done"):
+            case.form_status = new_status
+            db.session.commit()
+            flash("Form status updated.", "success")
+        return redirect(url_for("dish.form"))
+    return render_template("dish/form_edit.html", case=case)    
 
 
 @dish_bp.route("/documents")
@@ -86,13 +183,169 @@ def drafting():
 @dish_bp.route("/applications-dashboard")
 @login_required
 def dish_applications():
-    return render_template("dish/coming_soon.html", title="Dish Applications")
+    tab = request.args.get("tab", "all")
+    search = request.args.get("q", "").strip()
+    sort = request.args.get("sort", "default")
+
+    query = DishApplication.query.join(DishCase).join(Lead)
+
+    if tab == "new":
+        query = query.filter(DishApplication.subtype == "new")
+    elif tab == "revised":
+        query = query.filter(DishApplication.subtype == "revised")
+    elif tab == "revised_ext":
+        query = query.filter(DishApplication.subtype == "revised_with_extension")
+    elif tab in ("map", "stability", "license"):
+        query = query.filter(DishApplication.application_type == tab)
+    elif tab == "approved":
+        query = query.filter(DishApplication.application_status == "approved")
+    elif tab == "rejected":
+        query = query.filter(DishApplication.application_status == "rejected")
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                DishApplication.application_no.ilike(f"%{search}%"),
+            )
+        )
+
+    if sort == "due_asc":
+        query = query.order_by(DishApplication.due_date.asc())
+    elif sort == "due_desc":
+        query = query.order_by(DishApplication.due_date.desc())
+    elif sort == "applied_desc":
+        query = query.order_by(DishApplication.created_at.desc())
+    elif sort == "company":
+        query = query.order_by(Lead.company_name.asc())
+    else:
+        query = query.order_by(
+            (DishApplication.application_status == "pending").desc(),
+            DishApplication.due_date.asc(),
+        )
+
+    applications = query.all()
+
+    all_apps = DishApplication.query.all()
+    today = datetime.utcnow().date()
+    month_start = today.replace(day=1)
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    total_applications = len(all_apps)
+    due_this_month = sum(1 for a in all_apps if a.application_status == "pending" and a.due_date and month_start <= a.due_date < next_month)
+    overdue = sum(1 for a in all_apps if a.application_status == "pending" and a.due_date and a.due_date < today)
+    approved = sum(1 for a in all_apps if a.application_status == "approved")
+    rejected = sum(1 for a in all_apps if a.application_status == "rejected")
+    pending_on_track = sum(1 for a in all_apps if a.application_status == "pending" and not (a.due_date and a.due_date < today))
+
+    upcoming = sorted(
+        [a for a in all_apps if a.application_status == "pending" and a.due_date and a.due_date >= today],
+        key=lambda a: a.due_date,
+    )[:5]
+
+    cases = DishCase.query.join(Lead).order_by(Lead.company_name).all()
+
+    return render_template(
+        "dish/applications_dashboard.html",
+        applications=applications, cases=cases, tab=tab, search=search, sort=sort,
+        total_applications=total_applications, due_this_month=due_this_month,
+        overdue=overdue, approved=approved, rejected=rejected, pending_on_track=pending_on_track,
+        upcoming=upcoming, today=today,
+        status_label=application_status_label, status_pill=application_status_pill,
+        subtype_labels=SUBTYPE_LABELS,
+    )
+
+
+@dish_bp.route("/applications-dashboard/create", methods=["POST"])
+@login_required
+def create_application():
+    case_id = request.form.get("dish_case_id")
+    application_type = request.form.get("application_type")
+    subtype = request.form.get("subtype")
+    work_order_date = request.form.get("work_order_date")
+
+    if not (case_id and application_type and subtype and work_order_date):
+        flash("Please fill in all fields.", "danger")
+        return redirect(url_for("dish.dish_applications"))
+
+    wo_date = datetime.strptime(work_order_date, "%Y-%m-%d").date()
+    due = wo_date + timedelta(days=DUE_DAYS.get(application_type, 45))
+
+    app_row = DishApplication(
+        dish_case_id=case_id,
+        application_type=application_type,
+        subtype=subtype,
+        application_no=generate_application_no(application_type, subtype),
+        work_order_date=wo_date,
+        due_date=due,
+    )
+    db.session.add(app_row)
+    db.session.commit()
+    flash(f"Application {app_row.application_no} created.", "success")
+    return redirect(url_for("dish.dish_applications"))
+
+
+@dish_bp.route("/applications-dashboard/<int:app_id>/status", methods=["POST"])
+@login_required
+def update_application_status(app_id):
+    app_row = DishApplication.query.get_or_404(app_id)
+    new_status = request.form.get("application_status")
+    if new_status in ("pending", "approved", "rejected"):
+        app_row.application_status = new_status
+        db.session.commit()
+        flash("Application status updated.", "success")
+    return redirect(url_for("dish.dish_applications"))
+
+
+MAP_STATUS_LABELS = {"new": "New", "revised": "Revised", "revised_with_extension": "Revised With Extension", "not_in_scope": "Not In Scope"}
 
 
 @dish_bp.route("/applications")
 @login_required
 def applications():
-    return render_template("dish/coming_soon.html", title="Applications")
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                DishCase.map_portal_id.ilike(f"%{search}%"),
+            )
+        )
+    if status == "query":
+        query = query.filter(DishCase.liaisoning_status == "query")
+    elif status in ("online_pending", "offline_pending"):
+        query = query.filter(DishCase.map_application_status == status)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/applications.html",
+        cases=cases, search=search, status=status, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+        map_status_labels=MAP_STATUS_LABELS,
+    )
+
+
+@dish_bp.route("/applications/<int:case_id>/submit", methods=["POST"])
+@login_required
+def mark_application_submitted(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.map_application_status = "submitted"
+    db.session.commit()
+    flash("Application marked as submitted.", "success")
+    return redirect(url_for("dish.applications", **request.form.to_dict()))
 
 
 @dish_bp.route("/liaisoning-of-applications")

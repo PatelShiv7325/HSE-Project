@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH / Form{% endblock %}
+{% block breadcrumb_title %}Update Status{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ case.lead.company_name if case.lead else 'DISH Case' }}</h4>
+    <a href="{{ url_for('dish.form') }}" class="btn btn-outline">Back to Form Table</a>
+  </div>
+
+  <table class="data-table" style="margin-bottom:20px;">
+    <tr><th style="width:40%;">Client Name</th><td>{{ case.lead.client_name if case.lead else '-' }}</td></tr>
+    <tr><th>Company Address</th><td>{{ case.lead.company_address if case.lead else '-' }}</td></tr>
+    <tr><th>Contact No.</th><td>{{ case.lead.contact_no if case.lead else '-' }}</td></tr>
+  </table>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Form Status</label>
+    <select name="form_status" style="width:100%; margin-bottom:16px;">
+      <option value="pending" {% if case.form_status == 'pending' %}selected{% endif %}>Company Pending</option>
+      <option value="done" {% if case.form_status == 'done' %}selected{% endif %}>Company Done</option>
+    </select>
+    <button class="btn btn-primary" type="submit">Save Status</button>
+  </form>
+</div>
+{% endblock %}
