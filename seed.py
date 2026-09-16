@@ -15,7 +15,7 @@ with app.app_context():
         if not Role.query.filter_by(name=name).first():
             db.session.add(Role(name=name))
 
-    default_departments = ["DISH", "GIDC", "BAUDA"]
+    default_departments = ["DISH"]
     for name in default_departments:
         if not Department.query.filter_by(name=name).first():
             db.session.add(Department(name=name))

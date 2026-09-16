@@ -30,9 +30,6 @@ def create_app():
     from app.sales.routes import sales_bp
     from app.fieldwork.routes import fieldwork_bp
     from app.dish.routes import dish_bp
-    from app.bauda.routes import bauda_bp
-    from app.gidc.routes import gidc_bp
-    from app.tpo.routes import tpo_bp
     from app.workflow.routes import workflow_bp
     from app.inspections.routes import inspections_bp
     from app.notifications.routes import notifications_bp
@@ -45,9 +42,6 @@ def create_app():
     app.register_blueprint(sales_bp)
     app.register_blueprint(fieldwork_bp)
     app.register_blueprint(dish_bp)
-    app.register_blueprint(bauda_bp)
-    app.register_blueprint(gidc_bp)
-    app.register_blueprint(tpo_bp)
     app.register_blueprint(workflow_bp)
     app.register_blueprint(inspections_bp)
     app.register_blueprint(notifications_bp)
@@ -182,11 +176,11 @@ def _ensure_schema_upgrades():
             "company_id": "INTEGER",
             "renewed_from_id": "INTEGER",
         },
-        # These four "*_case" tables (DISH/BAUDA/GIDC/TPO workflow tracking)
-        # had columns added to their models over time that were never added
-        # here -- every column below is listed so any older local/production
-        # copy of these tables gets fully caught up in one pass, regardless
-        # of exactly which columns it's missing.
+        # This "dish_case" table (DISH workflow tracking) had columns added
+        # to its model over time that were never added here -- every column
+        # below is listed so any older local/production copy of this table
+        # gets fully caught up in one pass, regardless of which columns it's
+        # missing.
         "dish_case": {
             "map_status": "VARCHAR(30) DEFAULT 'new'",
             "documentation_user_id": "INTEGER",
@@ -214,26 +208,6 @@ def _ensure_schema_upgrades():
             "license_status": "VARCHAR(20) DEFAULT 'online_pending'",
             "liaisoning_license_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
             "drafting_file_filename": "VARCHAR(255)",
-        },
-        "bauda_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "form_status": "VARCHAR(20) DEFAULT 'pending'",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
-            "approved_status": "VARCHAR(20) DEFAULT 'pending'",
-        },
-        "gidc_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
-        },
-        "tpo_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
         },
     }
 

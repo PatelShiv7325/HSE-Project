@@ -74,9 +74,6 @@ def whatsapp_logs():
 TEMPLATE_CATEGORIES = [
     "Accounts & Billing",
     "DISH Application",
-    "GIDC Application",
-    "BAUDA Application",
-    "TPO Application",
     "General",
 ]
 
