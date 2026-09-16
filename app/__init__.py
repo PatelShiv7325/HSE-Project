@@ -207,7 +207,7 @@ def _ensure_schema_upgrades():
             "stability_status": "VARCHAR(20) DEFAULT 'pending'",
             "stability_structure_filename": "VARCHAR(255)",
             "stability_certificate_filename": "VARCHAR(255)",
-            "stability_review_sent_at": "DATETIME",
+            "stability_review_sent_at": "TIMESTAMP",
             "license_type": "VARCHAR(10)",
             "license_portal_id": "VARCHAR(120)",
             "license_portal_password": "VARCHAR(120)",
