@@ -8,7 +8,7 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import DishCase, DishApplication, Lead, User
+from app.models import DishCase, DishApplication, Lead, User, SiteVisit
 
 dish_bp = Blueprint("dish", __name__, url_prefix="/dish")
 
@@ -191,10 +191,131 @@ def documents():
     return render_template("dish/coming_soon.html", title="Documents")
 
 
+DRAFTING_STATUS_LABELS = {
+    "file_upload_pending": "File Upload Pending",
+    "internal_qc_pending": "Internal QC Pending",
+    "company_approval_pending": "Company Approval Pending",
+    "qc_rejected": "QC Rejected",
+    "company_rejected": "Company Rejected",
+    "done": "Complete",
+}
+# Pill CSS class (from theme.css .status-pill variants) per drafting_status.
+DRAFTING_STATUS_PILL = {
+    "file_upload_pending": "pending",
+    "internal_qc_pending": "assigned",
+    "company_approval_pending": "assigned",
+    "qc_rejected": "overdue",
+    "company_rejected": "overdue",
+    "done": "done",
+}
+# What the green "advance" action moves a case to, from its current status.
+# Rejected states are intentionally excluded -- those need a human to open
+# Upload and decide what to do next, not a one-click bump.
+DRAFTING_ADVANCE_TO = {
+    "file_upload_pending": "internal_qc_pending",
+    "internal_qc_pending": "company_approval_pending",
+    "company_approval_pending": "done",
+}
+
+
+def _save_drafting_file(file_obj, case_id):
+    """Saves an uploaded drafting file under static/uploads/drafting and
+    returns the stored filename, or None if no file was chosen."""
+    if not file_obj or not file_obj.filename:
+        return None
+    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "drafting")
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(file_obj.filename)
+    stored_name = f"drafting_{case_id}_{uuid4().hex}_{filename}"
+    file_obj.save(os.path.join(upload_dir, stored_name))
+    return stored_name
+
+
 @dish_bp.route("/drafting")
 @login_required
 def drafting():
-    return render_template("dish/coming_soon.html", title="Drafting")
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(Lead.company_name.ilike(f"%{search}%"))
+    if status in DRAFTING_STATUS_LABELS:
+        query = query.filter(DishCase.drafting_status == status)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    # Most recent site visit per lead, batched into one query instead of
+    # N+1 -- keyed by lead_id so the template can look each one up directly.
+    lead_ids = [c.lead_id for c in cases]
+    site_visit_engineer_by_lead = {}
+    if lead_ids:
+        visits = (
+            SiteVisit.query.filter(SiteVisit.lead_id.in_(lead_ids))
+            .order_by(SiteVisit.id.desc()).all()
+        )
+        for v in visits:
+            if v.lead_id not in site_visit_engineer_by_lead and v.engineer and v.engineer.user:
+                site_visit_engineer_by_lead[v.lead_id] = v.engineer.user.name
+
+    return render_template(
+        "dish/drafting.html",
+        cases=cases, search=search, status=status, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+        site_visit_engineer_by_lead=site_visit_engineer_by_lead,
+        status_labels=DRAFTING_STATUS_LABELS, status_pill=DRAFTING_STATUS_PILL,
+        map_labels=MAP_STATUS_LABELS,
+    )
+
+
+@dish_bp.route("/drafting/<int:case_id>/upload", methods=["GET", "POST"])
+@login_required
+def drafting_upload(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if request.method == "POST":
+        stored = _save_drafting_file(request.files.get("document"), case_id)
+        if stored:
+            case.drafting_file_filename = stored
+            if case.drafting_status == "file_upload_pending":
+                case.drafting_status = "internal_qc_pending"
+            db.session.commit()
+            flash("Drafting file uploaded.", "success")
+        else:
+            flash("Please choose a file to upload.", "danger")
+        return redirect(url_for("dish.drafting_upload", case_id=case_id))
+    return render_template(
+        "dish/drafting_upload.html", case=case,
+        status_labels=DRAFTING_STATUS_LABELS,
+    )
+
+
+@dish_bp.route("/drafting/uploads/<path:filename>")
+@login_required
+def drafting_download(filename):
+    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "drafting")
+    return send_from_directory(upload_dir, filename)
+
+
+@dish_bp.route("/drafting/<int:case_id>/advance", methods=["POST"])
+@login_required
+def drafting_advance(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    next_status = DRAFTING_ADVANCE_TO.get(case.drafting_status)
+    if not next_status:
+        flash("This case is in a rejected state -- open Upload to review it manually.", "danger")
+        return redirect(request.referrer or url_for("dish.drafting"))
+    case.drafting_status = next_status
+    db.session.commit()
+    flash(f"'{case.lead.company_name}' moved to {DRAFTING_STATUS_LABELS[next_status]}.", "success")
+    return redirect(request.referrer or url_for("dish.drafting"))
 
 
 @dish_bp.route("/applications-dashboard")
@@ -654,7 +775,73 @@ def mark_license_submitted(case_id):
     return redirect(request.referrer or url_for("dish.license_page"))
 
 
+LICENSE_TYPE_LABELS = {"new": "New", "renew": "Renew"}
+LIAISONING_LICENSE_LABELS = {
+    "regional_forward_pending": "Regional Office Forward Pending",
+    "regional_approval_pending": "Regional Office Approval Pending",
+    "query": "Regional Office Query",
+    "hard_copy_pending": "Hard Copy Upload Pending",
+    "done": "Complete",
+}
+LIAISONING_LICENSE_NEXT = {
+    "regional_forward_pending": "regional_approval_pending",
+    "regional_approval_pending": "hard_copy_pending",
+    "hard_copy_pending": "done",
+    "query": "regional_approval_pending",
+    "done": "done",
+}
+
+
 @dish_bp.route("/liaisoning-of-license")
 @login_required
 def liaisoning_license():
-    return render_template("dish/coming_soon.html", title="Liaisoning of License")
+    search = request.args.get("q", "").strip()
+    status = request.args.get("status", "").strip()
+    per_page = request.args.get("per_page", 10, type=int)
+    page = request.args.get("page", 1, type=int)
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                DishCase.license_portal_id.ilike(f"%{search}%"),
+            )
+        )
+    if status in LIAISONING_LICENSE_LABELS:
+        query = query.filter(DishCase.liaisoning_license_status == status)
+    query = query.order_by(DishCase.id.desc())
+
+    total = query.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    cases = query.offset((page - 1) * per_page).limit(per_page).all()
+    start = 0 if total == 0 else (page - 1) * per_page + 1
+    end = min(page * per_page, total)
+
+    return render_template(
+        "dish/liaisoning_license.html",
+        cases=cases, search=search, status=status, per_page=per_page,
+        page=page, total_pages=total_pages, total=total, start=start, end=end,
+        license_type_labels=LICENSE_TYPE_LABELS, status_labels=LIAISONING_LICENSE_LABELS,
+    )
+
+
+@dish_bp.route("/liaisoning-of-license/<int:case_id>/query", methods=["POST"])
+@login_required
+def liaisoning_license_query(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.liaisoning_license_status = "query"
+    db.session.commit()
+    flash("Marked as regional office query.", "success")
+    return redirect(url_for("dish.liaisoning_license", **request.form.to_dict()))
+
+
+@dish_bp.route("/liaisoning-of-license/<int:case_id>/forward", methods=["POST"])
+@login_required
+def liaisoning_license_forward(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    case.liaisoning_license_status = LIAISONING_LICENSE_NEXT.get(case.liaisoning_license_status, "done")
+    db.session.commit()
+    flash("Application forwarded.", "success")
+    return redirect(url_for("dish.liaisoning_license", **request.form.to_dict()))

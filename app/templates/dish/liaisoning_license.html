@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Liaisoning of License{% endblock %}
+{% block content %}
+<style>
+  .liaisoning-filter { margin-bottom: 16px; max-width: 260px; }
+  .portal-cell { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .btn-query { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn-forward { background: var(--success); border-color: var(--success); color: #fff; }
+</style>
+
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Liaisoning of License Table</h4>
+    <a href="{{ url_for('dish.liaisoning_license') }}" class="btn btn-primary" style="background:#6C4CE0; border-color:#6C4CE0;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+      Officer Dashboard
+    </a>
+  </div>
+
+  <form method="get" class="liaisoning-filter">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Select Status Type</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      {% for key, label in status_labels.items() %}
+        <option value="{{ key }}" {% if status == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="q" value="{{ search }}">
+    <input type="hidden" name="per_page" value="{{ per_page }}">
+  </form>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <input type="hidden" name="status" value="{{ status }}">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Company or portal ID" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th>
+          <th>Company Name</th>
+          <th>Portal ID / Password</th>
+          <th>License</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c.lead_id }}</td>
+          <td style="font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</td>
+          <td class="portal-cell">
+            {% if c.license_portal_id %}ID :- {{ c.license_portal_id }}<br>{% endif %}
+            {% if c.license_portal_password %}Password :- {{ c.license_portal_password }}{% endif %}
+          </td>
+          <td>{{ license_type_labels.get(c.license_type, c.license_type or '-')|upper }}</td>
+          <td><span class="status-pill in_progress">{{ status_labels.get(c.liaisoning_license_status, c.liaisoning_license_status)|upper }}</span></td>
+          <td style="white-space:nowrap;">
+            <form method="post" action="{{ url_for('dish.liaisoning_license_query', case_id=c.id) }}" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="per_page" value="{{ per_page }}">
+              <button class="btn btn-query" type="submit">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Query
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('dish.liaisoning_license_forward', case_id=c.id) }}" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="status" value="{{ status }}"><input type="hidden" name="per_page" value="{{ per_page }}">
+              <button class="btn btn-forward" type="submit">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                Application Forwarded
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center; padding:24px;">No license liaisoning records found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page, 'status': status} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.liaisoning_license', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.liaisoning_license', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.liaisoning_license', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

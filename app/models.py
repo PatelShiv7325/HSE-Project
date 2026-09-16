@@ -226,8 +226,13 @@ class DishCase(db.Model):
     license_portal_password = db.Column(db.String(120))
     license_status = db.Column(db.String(20), default="online_pending")  # online_pending, submitted
 
+    liaisoning_license_status = db.Column(db.String(30), default="regional_forward_pending")
+    # regional_forward_pending, regional_approval_pending, query, hard_copy_pending, done
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    drafting_file_filename = db.Column(db.String(255))
+    
     lead = db.relationship("Lead")
     documentation_user = db.relationship("User", foreign_keys=[documentation_user_id])
     stability_user = db.relationship("User", foreign_keys=[stability_user_id])

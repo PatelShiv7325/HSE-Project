@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH / Drafting{% endblock %}
+{% block breadcrumb_title %}Upload File{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ case.lead.company_name if case.lead else 'DISH Case' }}</h4>
+    <a href="{{ url_for('dish.drafting') }}" class="btn btn-outline">Back to Drafting Table</a>
+  </div>
+
+  <table class="data-table" style="margin-bottom:20px;">
+    <tr><th style="width:40%;">Current Status</th><td>{{ status_labels.get(case.drafting_status, case.drafting_status) }}</td></tr>
+    <tr>
+      <th>Current File</th>
+      <td>
+        {% if case.drafting_file_filename %}
+          <a href="{{ url_for('dish.drafting_download', filename=case.drafting_file_filename) }}" target="_blank">{{ case.drafting_file_filename.split('_', 3)|last }}</a>
+        {% else %}
+          <span class="text-muted">No file uploaded yet</span>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Choose Drafting File</label>
+    <input type="file" name="document" required style="margin-bottom:16px; width:100%;">
+    <button class="btn btn-primary" type="submit">Upload</button>
+  </form>
+</div>
+{% endblock %}

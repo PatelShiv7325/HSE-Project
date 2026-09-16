@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Drafting{% endblock %}
+{% block content %}
+<style>
+  .apps-table-filter { margin-bottom: 16px; max-width: 260px; }
+  .icon-only-btn { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+  .icon-only-btn.upload { color:var(--warning); border-color:var(--warning-bg); background:var(--warning-bg); }
+  .icon-only-btn.advance { color:#fff; border-color:var(--success); background:var(--success); }
+</style>
+
+<div class="card">
+  <div class="toolbar">
+    <h4 style="margin:0;">Drafting Table</h4>
+  </div>
+
+  <form method="get" class="apps-table-filter">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">Select Status Type</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Select Status Type</option>
+      {% for value, label in status_labels.items() %}
+        <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="q" value="{{ search }}">
+    <input type="hidden" name="per_page" value="{{ per_page }}">
+  </form>
+
+  <form method="get" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+    <input type="hidden" name="status" value="{{ status }}">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Show
+      <select name="per_page" onchange="this.form.submit()" style="width:75px;">
+        {% for n in [10, 25, 50, 100] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+      entries
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);">
+      Search:
+      <input type="text" name="q" value="{{ search }}" placeholder="Company name" onchange="this.form.submit()">
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>SR NO</th>
+          <th>Company Name</th>
+          <th>Map</th>
+          <th>Site Visit Engineer</th>
+          <th>Drafting Engineer</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in cases %}
+        <tr>
+          <td>{{ c.lead_id }}</td>
+          <td style="font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</td>
+          <td>{{ map_labels.get(c.map_status, c.map_status or '-')|upper }}</td>
+          <td>{{ site_visit_engineer_by_lead.get(c.lead_id, '-') }}</td>
+          <td>{{ c.drafting_user.name if c.drafting_user else '-' }}</td>
+          <td>
+            <span class="status-pill {{ status_pill.get(c.drafting_status, 'pending') }}">
+              {{ status_labels.get(c.drafting_status, c.drafting_status)|upper }}
+            </span>
+          </td>
+          <td style="white-space:nowrap; display:flex; gap:6px;">
+            <a class="btn btn-outline icon-only-btn upload" href="{{ url_for('dish.drafting_upload', case_id=c.id) }}" title="Upload drafting file">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            </a>
+            {% if c.drafting_status in ('file_upload_pending', 'internal_qc_pending', 'company_approval_pending') %}
+            <form method="post" action="{{ url_for('dish.drafting_advance', case_id=c.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn icon-only-btn advance" type="submit" title="Advance to next stage">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V6M5 12l7-7 7 7"/></svg>
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No DISH drafting cases found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:10px; font-size:13px; color:var(--text-muted);">
+    <span>Showing {{ start }} to {{ end }} of {{ total }} entries</span>
+    <div style="display:flex; gap:4px;">
+      {% set base_args = {'q': search, 'per_page': per_page, 'status': status} %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.drafting', page=page-1, **base_args) if page > 1 else '#' }}">Previous</a>
+      {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+          <span class="btn btn-primary" style="padding:6px 12px; font-size:12.5px;">{{ p }}</span>
+        {% elif p <= 2 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+          <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.drafting', page=p, **base_args) }}">{{ p }}</a>
+        {% elif p == 3 or p == total_pages - 2 %}
+          <span style="padding:6px 4px;">...</span>
+        {% endif %}
+      {% endfor %}
+      <a class="btn btn-outline" style="padding:6px 12px; font-size:12.5px;" href="{{ url_for('dish.drafting', page=page+1, **base_args) if page < total_pages else '#' }}">Next</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

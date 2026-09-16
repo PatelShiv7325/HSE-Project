@@ -212,6 +212,8 @@ def _ensure_schema_upgrades():
             "license_portal_id": "VARCHAR(120)",
             "license_portal_password": "VARCHAR(120)",
             "license_status": "VARCHAR(20) DEFAULT 'online_pending'",
+            "liaisoning_license_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
+            "drafting_file_filename": "VARCHAR(255)",
         },
         "bauda_case": {
             "documentation_user_id": "INTEGER",
