@@ -14,20 +14,17 @@
     <h4>Report Details</h4>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
       <div style="grid-column:span 2;">
-        <label style="display:block; margin-bottom:3px;">Company (optional - auto-fills occupier &amp; address below)</label>
-        <select id="company_select" name="company_id" onchange="fillFromCompany(this)">
-          <option value="">-- Select a company --</option>
+        <label style="display:block; margin-bottom:3px;">Company (optional - type to search, auto-fills occupier &amp; address below)</label>
+        <input type="text" id="company_search" list="companies_datalist" autocomplete="off"
+               placeholder="Type a company name to search..."
+               value="{{ (report.company.name if report.company else '') if report else '' }}"
+               oninput="onCompanySearchInput(this)">
+        <datalist id="companies_datalist">
           {% for c in companies %}
-            <option value="{{ c.id }}"
-              data-occupier="{{ c.occupier_name or '' }}"
-              data-address="{{ c.address or '' }}"
-              data-reg="{{ c.registration_no or '' }}"
-              data-license="{{ c.license_no or '' }}"
-              {% if report and report.company_id == c.id %}selected{% endif %}>
-              {{ c.name }}
-            </option>
+            <option value="{{ c.name }}">
           {% endfor %}
-        </select>
+        </datalist>
+        <input type="hidden" id="company_id" name="company_id" value="{{ report.company_id if report and report.company_id else '' }}">
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Report No. *</label>
@@ -191,18 +188,34 @@
 
 {% block scripts %}
 <script>
-  // When a company is picked from the dropdown, copy its occupier/address/
-  // reg-no/license-no into the matching fields below -- only fills fields
-  // that are currently empty, so it never overwrites something you already typed.
-  function fillFromCompany(select) {
-    var opt = select.options[select.selectedIndex];
-    if (!opt || !opt.value) return;
+  // Full company directory, embedded once as JSON so the search box can
+  // match what's typed against it client-side (no extra request per
+  // keystroke).
+  var COMPANIES = {{ companies_json|tojson }};
+
+  // Typing into the Company box matches against COMPANIES by exact name
+  // (what the datalist's suggestions show). Once it matches, this behaves
+  // just like picking from the old dropdown: sets the hidden company_id
+  // and fills occupier/address/reg/license -- but only into fields that
+  // are still empty, so it never overwrites something you already typed.
+  // If what's typed doesn't match any known company, company_id is
+  // cleared -- the report just saves without a company link, same as
+  // leaving the old dropdown on "-- Select a company --".
+  function onCompanySearchInput(input) {
+    var match = COMPANIES.find(function (c) { return c.name === input.value; });
+    var hidden = document.getElementById('company_id');
+
+    if (!match) {
+      hidden.value = '';
+      return;
+    }
+    hidden.value = match.id;
 
     var map = {
-      occupier_name: opt.getAttribute('data-occupier'),
-      address: opt.getAttribute('data-address'),
-      reg_no: opt.getAttribute('data-reg'),
-      license_no: opt.getAttribute('data-license'),
+      occupier_name: match.occupier_name,
+      address: match.address,
+      reg_no: match.reg_no,
+      license_no: match.license_no,
     };
     Object.keys(map).forEach(function (fieldId) {
       var el = document.getElementById(fieldId);

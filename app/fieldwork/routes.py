@@ -35,7 +35,7 @@ def site_visits():
     start = 0 if total == 0 else (page - 1) * per_page + 1
     end = min(page * per_page, total)
 
-    return render_template(
+    return render_template( 
         "fieldwork/site_visits.html",
         visits=visits,
         leads=Lead.query.all(),

@@ -11,6 +11,23 @@ import re
 
 inspections_bp = Blueprint("inspections", __name__, url_prefix="/inspections")
 
+
+def _companies_json():
+    """Every company as a plain dict, for the type-to-search Company box on
+    the Form 9/10/11/PSV/Centrifuge forms -- embedded once as JSON so
+    filtering happens client-side per keystroke with no extra requests."""
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "occupier_name": c.occupier_name or "",
+            "address": c.address or "",
+            "reg_no": c.registration_no or "",
+            "license_no": c.license_no or "",
+        }
+        for c in Company.query.order_by(Company.name.asc()).all()
+    ]
+
 # Every field that lives inside InspectionReport.data for a Form 9
 # (Hoists/Lifts examination certificate). report_no and report_date are
 # stored as real columns (for search/sort/uniqueness); everything else
@@ -138,6 +155,7 @@ def _form9_save(report):
         data=(report.data if report else {}),
         today=date.today().isoformat(),
         companies=Company.query.order_by(Company.name.asc()).all(),
+        companies_json=_companies_json(),
     )
 
 
@@ -540,6 +558,7 @@ def _generic_save(form_type, report):
         today=date.today().isoformat(),
         suggested_report_no=(report.report_no if report else _suggest_report_no(form_type)),
         companies=Company.query.order_by(Company.name.asc()).all(),
+        companies_json=_companies_json(),
     )
 
 
