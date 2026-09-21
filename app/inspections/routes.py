@@ -12,6 +12,57 @@ import re
 inspections_bp = Blueprint("inspections", __name__, url_prefix="/inspections")
 
 
+def _html_to_pdf_bytes(html):
+    """Renders an HTML string to PDF bytes, via a separate subprocess
+    running app/pdf_worker.py (see that file for why it's a subprocess
+    rather than an in-process Playwright call). Replaces WeasyPrint, which
+    depends on native GTK/Pango/Cairo system libraries (gobject-2.0-0.dll
+    etc.) that pip cannot install on Windows -- Playwright's Chromium
+    engine renders the exact same CSS (including @page, @font-face,
+    Google Fonts) as a real browser would, so nothing about the PDF
+    templates needs to change.
+
+    Raises RuntimeError with a clear setup message if Playwright itself,
+    or its Chromium browser, isn't installed yet -- callers catch this
+    the same way they used to catch weasyprint's ImportError.
+    """
+    import subprocess
+    import sys
+    import os
+
+    worker_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pdf_worker.py")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, worker_path],
+            input=html.encode("utf-8"),
+            capture_output=True,
+            timeout=60,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "PDF export needs the 'playwright' package -- run: pip install -r requirements.txt"
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("PDF export timed out -- try again, or check that Chromium is installed.")
+
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        if "Executable doesn't exist" in stderr or "playwright install" in stderr:
+            raise RuntimeError(
+                "PDF export needs Chromium installed -- run: playwright install chromium"
+            )
+        if "No module named" in stderr and "playwright" in stderr:
+            raise RuntimeError(
+                "PDF export needs the 'playwright' package -- run: pip install -r requirements.txt"
+            )
+        # Anything else: surface the real error rather than a generic one,
+        # since this is a fresh, previously-unseen failure mode.
+        raise RuntimeError(f"PDF export failed: {stderr.strip()[-500:]}")
+
+    return result.stdout
+
+
 def _companies_json():
     """Every company as a plain dict, for the type-to-search Company box on
     the Form 9/10/11/PSV/Centrifuge forms -- embedded once as JSON so
@@ -174,17 +225,12 @@ def form9_delete(report_id):
 def form9_pdf(report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type="form9").first_or_404()
 
-    # WeasyPrint is an optional dependency -- imported here (not at module
-    # level) so the rest of the app still runs even before `pip install`
-    # has been re-run to pick it up from requirements.txt.
-    try:
-        from weasyprint import HTML
-    except ImportError:
-        flash("PDF export needs the 'weasyprint' package -- run: pip install -r requirements.txt", "danger")
-        return redirect(url_for("inspections.form9_list"))
-
     html = render_template("inspections/form9_pdf.html", report=report, data=report.data)
-    pdf_bytes = HTML(string=html, base_url=request.url_root).write_pdf()
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inspections.form9_list"))
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -223,9 +269,9 @@ FORMS_CONFIG = {
                 ("location", "Location", "text", None),
             ]),
             ("Dates", [
-                ("first_use_date", "First Use Date", "date", None),
+                ("first_use_date", "First Use Date", "text", None),
                 ("last_exam_date", "Last Exam Date", "date", None),
-                ("examination_date", "Examination Date", "date", None),
+                ("examination_date", "Examination Date", "text", None),
                 ("examined_by", "Examined By", "text", None),
             ]),
             ("Findings", [
@@ -604,17 +650,15 @@ def generic_pdf(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
     config = FORMS_CONFIG[form_type]
 
-    try:
-        from weasyprint import HTML
-    except ImportError:
-        flash("PDF export needs the 'weasyprint' package -- run: pip install -r requirements.txt", "danger")
-        return redirect(url_for("inspections.generic_list", form_type=form_type))
-
     html = render_template(
         "inspections/generic_pdf.html",
         report=report, data=report.data, config=config, form_type=form_type,
     )
-    pdf_bytes = HTML(string=html, base_url=request.url_root).write_pdf()
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inspections.generic_list", form_type=form_type))
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -935,14 +979,12 @@ def form9_export_pdf():
         flash("No Form 9 reports match the current search to export.", "danger")
         return redirect(url_for("inspections.form9_list", q=search))
 
-    try:
-        from weasyprint import HTML
-    except ImportError:
-        flash("PDF export needs the 'weasyprint' package -- run: pip install -r requirements.txt", "danger")
-        return redirect(url_for("inspections.form9_list", q=search))
-
     html = render_template("inspections/form9_bulk_pdf.html", reports=reports)
-    pdf_bytes = HTML(string=html, base_url=request.url_root).write_pdf()
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inspections.form9_list", q=search))
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -976,14 +1018,12 @@ def generic_export_pdf(form_type):
         flash(f"No {config['label']} reports match the current search to export.", "danger")
         return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
 
-    try:
-        from weasyprint import HTML
-    except ImportError:
-        flash("PDF export needs the 'weasyprint' package -- run: pip install -r requirements.txt", "danger")
-        return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
-
     html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type)
-    pdf_bytes = HTML(string=html, base_url=request.url_root).write_pdf()
+    try:
+        pdf_bytes = _html_to_pdf_bytes(html)
+    except RuntimeError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"

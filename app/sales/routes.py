@@ -12,12 +12,6 @@ LEAD_STATUSES = [
     "Work Order Received",
 ]
 
-# Matches the drafting stage names already referenced in app/__init__.py's
-# inject_nav_counts(). Getting a work order kicks off these three stages.
-DRAFTING_STAGE_NAMES = [
-    "Architectural Drafting", "Structural Drafting", "3D Elevation Drafting",
-]
-
 
 def status_key(label):
     return label.lower().replace(" ", "_")
@@ -102,7 +96,6 @@ def create_lead():
 @login_required
 def edit_lead(lead_id):
     lead = Lead.query.get_or_404(lead_id)
-    previous_status = lead.status
     lead.company_name = request.form.get("company_name")
     lead.company_address = request.form.get("company_address")
     lead.client_name = request.form.get("client_name")
@@ -110,19 +103,6 @@ def edit_lead(lead_id):
     lead.department_id = request.form.get("department_id") or None
     lead.status = request.form.get("status") or lead.status
 
-    # Getting a work order is what should actually start drafting work —
-    # nothing previously created WorkStage rows anywhere, so the Workflow
-    # To-Do list and Work Dashboard were always empty. Create the default
-    # stages the first time a lead reaches this status.
-    if lead.status == "work_order_received" and previous_status != "work_order_received":
-        existing_stage_names = {s.stage_name for s in lead.work_stages}
-        for stage_name in DRAFTING_STAGE_NAMES:
-            if stage_name not in existing_stage_names:
-                db.session.add(WorkStage(
-                    lead_id=lead.id,
-                    stage_name=stage_name,
-                    due_date=datetime.utcnow() + timedelta(days=14),
-                ))
 
     db.session.commit()
     flash("Lead updated.", "success")

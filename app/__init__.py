@@ -88,12 +88,6 @@ def create_app():
                 .count()
             )
 
-        drafting_stage_names = ["Architectural Drafting", "Structural Drafting", "3D Elevation Drafting"]
-        stage_counts = {
-            name: WorkStage.query.filter_by(stage_name=name).filter(WorkStage.status != "done").count()
-            for name in drafting_stage_names
-        }
-
         return {
             "nav_counts": {
                 "new_lead": Lead.query.filter_by(status="new").count(),
@@ -113,7 +107,6 @@ def create_app():
             },
             "nav_departments": Department.query.all(),
             "nav_department_counts": department_counts,
-            "nav_stage_counts": stage_counts,
         }
 
     with app.app_context():

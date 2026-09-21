@@ -137,21 +137,6 @@
         </a>
       </div>
     </details>
-    <a class="nav-item {% if request.path == '/workflow/drafting/architectural' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='architectural') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      <span class="nav-label">Architectural Drafting</span>
-      {% if nav_stage_counts and nav_stage_counts.get('Architectural Drafting') %}<span class="badge">{{ nav_stage_counts['Architectural Drafting'] }}</span>{% endif %}
-    </a>
-    <a class="nav-item {% if request.path == '/workflow/drafting/structural' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='structural') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      <span class="nav-label">Structural Drafting</span>
-      {% if nav_stage_counts and nav_stage_counts.get('Structural Drafting') %}<span class="badge">{{ nav_stage_counts['Structural Drafting'] }}</span>{% endif %}
-    </a>
-    <a class="nav-item {% if request.path == '/workflow/drafting/elevation' %}active{% endif %}" href="{{ url_for('workflow.drafting_table', slug='elevation') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      <span class="nav-label">3D Elevation Drafting</span>
-      {% if nav_stage_counts and nav_stage_counts.get('3D Elevation Drafting') %}<span class="badge">{{ nav_stage_counts['3D Elevation Drafting'] }}</span>{% endif %}
-    </a>
 
     <div class="nav-section-label">Companies</div>
     <a class="nav-item {% if request.path.startswith('/companies') %}active{% endif %}" href="{{ url_for('companies.list_companies') }}">
@@ -160,30 +145,42 @@
     </a>
 
     <div class="nav-section-label">Inspections</div>
-    <a class="nav-item {% if request.path == url_for('inspections.dashboard') %}active{% endif %}" href="{{ url_for('inspections.dashboard') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-      <span class="nav-label">Compliance Dashboard</span>
-    </a>
-    <a class="nav-item {% if request.path.startswith('/inspections/form9') %}active{% endif %}" href="{{ url_for('inspections.form9_list') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="nav-label">Form 9 - Hoists/Lifts</span>
-    </a>
-    <a class="nav-item {% if request.path.startswith('/inspections/form10') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form10') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="nav-label">Form 10 - Cranes/Machines</span>
-    </a>
-    <a class="nav-item {% if request.path.startswith('/inspections/form11') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form11') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="nav-label">Form 11 - Pressure Vessel</span>
-    </a>
-    <a class="nav-item {% if request.path.startswith('/inspections/psv') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='psv') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="nav-label">PSV Certificate</span>
-    </a>
-    <a class="nav-item {% if request.path.startswith('/inspections/centrifuge') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='centrifuge') }}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="nav-label">Centrifuge Report</span>
-    </a>
+    <details class="nav-group" {% if request.path.startswith('/inspections') %}open{% endif %}>
+      <summary class="nav-item nav-group-toggle {% if request.path.startswith('/inspections') %}active{% endif %}">
+        <a href="{{ url_for('inspections.dashboard') }}" style="display:flex; align-items:center; gap:10px; flex:1; min-width:0; color:inherit; text-decoration:none;">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span class="nav-label">Compliance Dashboard</span>
+        </a>
+        <svg class="nav-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <div class="nav-subgroup">
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/form9') %}active{% endif %}" href="{{ url_for('inspections.form9_list') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Form 9 - Hoists/Lifts</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/form10') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form10') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Form 10 - Cranes/Machines</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/form11') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form11') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Form 11 - Pressure Vessel</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/psv') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='psv') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">PSV Certificate</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/centrifuge') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='centrifuge') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Centrifuge Report</span>
+        </a>
+      </div>
+    </details>
 
     <div class="nav-section-label">Accounts</div>
     <a class="nav-item {% if request.path.startswith('/accounts/payments') %}active{% endif %}" href="{{ url_for('accounts.payments') }}">
