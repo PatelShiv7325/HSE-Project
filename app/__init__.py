@@ -167,10 +167,11 @@ def _ensure_schema_upgrades():
             "license_expiry_date": "DATE",
             "photo_filename": "VARCHAR(255)",
         },
-        "whatsapp_log": {
+        "whats_app_log": {
             "lead_id": "INTEGER",
             "trigger_source": "VARCHAR(255)",
             "triggered_by": "VARCHAR(120)",
+            "attachment_filename": "VARCHAR(255)",
         },
         "inspection_report": {
             "company_id": "INTEGER",
@@ -208,6 +209,29 @@ def _ensure_schema_upgrades():
             "license_status": "VARCHAR(20) DEFAULT 'online_pending'",
             "liaisoning_license_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
             "drafting_file_filename": "VARCHAR(255)",
+        },
+        # Same drift risk as dish_case above -- BAUDA/GIDC/TPO didn't have
+        # this problem yet, but listing every column now means they never
+        # will, even as these models grow.
+        "bauda_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "form_status": "VARCHAR(20) DEFAULT 'pending'",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
+            "approved_status": "VARCHAR(20) DEFAULT 'pending'",
+        },
+        "gidc_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
+        },
+        "tpo_case": {
+            "documentation_user_id": "INTEGER",
+            "drawing_user_id": "INTEGER",
+            "drafting_user_id": "INTEGER",
+            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
         },
     }
 
