@@ -66,7 +66,7 @@
         <div style="background:var(--success-bg); color:var(--success); border-radius:var(--radius-sm); padding:12px; font-size:13px; margin-bottom:16px;">
           All system WhatsApp notifications will now be sent automatically from this number.
         </div>
-        <form method="post" action="{{ url_for('notifications.whatsapp_disconnect') }}" onsubmit="return confirm('Disconnect WhatsApp account?');">
+        <form method="post" action="{{ url_for('notifications.whatsapp_link_disconnect') }}" onsubmit="return confirm('Disconnect WhatsApp account?');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-outline" type="submit" style="width:100%; border-color:var(--danger); color:var(--danger);">Disconnect WhatsApp Account</button>
         </form>

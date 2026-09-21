@@ -188,7 +188,66 @@ select:focus-visible, textarea:focus-visible {
   font-weight: 700; font-size: 14px;
 }
 
+.menu-toggle {
+  display: none; /* shown only on mobile/tablet, see the media query below */
+  width: 38px; height: 38px; border-radius: var(--radius-sm);
+  align-items: center; justify-content: center;
+  background: var(--bg); color: var(--navy); border: 1px solid var(--border);
+  cursor: pointer; flex-shrink: 0;
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 19; /* just under .sidebar's z-index: 20 */
+}
+.sidebar-backdrop.open { display: block; }
+
 .content { padding: 24px 28px 40px; max-width: 1440px; }
+
+/* ---------- Sidebar navigation page-change animation ----------
+   This is a normal server-rendered app (each sidebar click is a full
+   page load), so the "transition" is two halves: the OLD page fades
+   itself out for a moment (via JS adding .page-leaving right before
+   navigating, in base.html), then every NEW page fades itself in
+   automatically on load via this animation -- no JS needed for that half. */
+.content { animation: pageFadeIn 0.28s ease; }
+
+.content.page-leaving {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content, .content.page-leaving { animation: none; transition: none; opacity: 1; transform: none; }
+}
+
+/* ---------- Native cross-document page transition (Chrome/Edge 126+, Safari 18+) ----------
+   Only applies in browsers that support the API AND when the visitor
+   hasn't asked for reduced motion; everyone else just gets the plain
+   instant page swap, which is already how browsers behave by default. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: 180ms ease both viewTransitionFadeOut;
+  }
+  ::view-transition-new(root) {
+    animation: 220ms ease both viewTransitionFadeIn;
+  }
+}
+
+@keyframes viewTransitionFadeOut {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes viewTransitionFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+}
 
 /* ---------- Tabs (Admin / Work / Employee Dashboard style) ---------- */
 .tab-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -393,9 +452,33 @@ table.dataTable thead th {
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 860px) {
-  :root { --sidebar-width: 220px; }
-  .content { padding: 18px; }
-  .topbar { padding: 12px 18px; }
+@media (max-width: 900px) {
+  :root { --sidebar-width: 260px; }
+
+  /* Sidebar becomes an off-canvas panel: hidden by default, slides in
+     over the content (not pushing it) when .open is toggled by the
+     hamburger button in the topbar. */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.18);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .main { margin-left: 0; }
+
+  .menu-toggle { display: flex; }
+
+  .content { padding: 16px; }
+  .topbar { padding: 12px 16px; }
   .stat-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  /* Phones: single-column stat cards and tighter spacing so nothing
+     gets squeezed into unreadable slivers. */
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .content { padding: 12px; }
+  .topbar .breadcrumb strong { font-size: 16px; }
+  .card { padding: 14px; }
 }
