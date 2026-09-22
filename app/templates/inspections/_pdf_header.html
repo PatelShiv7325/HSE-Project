@@ -1,0 +1,39 @@
+{# Letterhead header, rendered by Playwright as the repeating page header.
+   Inline styles only -- external stylesheets don't apply inside
+   Playwright's header/footer frame. Uses a 5mm left/right page margin so
+   its border lines up with _pdf_footer.html and the `body` border in
+   _pdf_body_style.html. #}
+<div style="width:100%; font-family:Arial,Helvetica,sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
+  <div style="margin:5mm 5mm 0 5mm; border:1px solid #000; border-bottom:none; padding:3mm 4mm 2.5mm 4mm; box-sizing:border-box;">
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="width:42mm; vertical-align:middle; padding-right:3mm; border-right:1px solid #999;">
+          {% if logo_data_uri %}
+          <img src="{{ logo_data_uri }}" style="max-width:38mm; max-height:22mm; display:block;">
+          {% endif %}
+        </td>
+        <td style="vertical-align:middle; padding-left:4mm;">
+          <div style="font-size:21px; font-weight:700; letter-spacing:3px; color:#1D3E71; text-transform:uppercase; line-height:1.15;">
+            {{ profile.legal_name if profile and profile.legal_name else 'Company Name' }}
+          </div>
+          {% if profile and profile.tagline %}
+          <div style="font-size:11.5px; font-weight:700; color:#D94042; text-transform:uppercase; margin-top:1mm;">{{ profile.tagline }}</div>
+          {% endif %}
+          {% if profile and profile.address %}
+          <div style="font-size:9.5px; color:#1D3E71; margin-top:1.5mm;">{{ profile.address }}</div>
+          {% endif %}
+          {% if profile and (profile.phone or profile.email or profile.website) %}
+          <div style="font-size:10px; font-weight:700; color:#1D3E71; margin-top:0.5mm;">
+            {%- set parts = [] -%}
+            {%- if profile.phone %}{% set _ = parts.append(profile.phone) %}{% endif -%}
+            {%- if profile.email %}{% set _ = parts.append(profile.email) %}{% endif -%}
+            {%- if profile.website %}{% set _ = parts.append(profile.website) %}{% endif -%}
+            {{ parts|join('  \u2022  ') }}
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+    <div style="border-bottom:2px dashed #1D3E71; margin-top:2.5mm;"></div>
+  </div>
+</div>

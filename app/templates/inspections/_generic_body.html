@@ -1,0 +1,231 @@
+<table class="header-bar-row">
+  <tr>
+    <td style="width:33%; text-align:left; font-weight:400;">Test Report No.<br><strong>{{ report.report_no }}</strong></td>
+    <td style="width:34%;">
+      {% if form_type == 'form10' %}
+        FORM NO. 10<br>(Prescribed under Rule 60)<br>Report of examination of lifting machines, ropes and lifting tackles particulars.
+      {% elif form_type == 'form11' %}
+        FORM NO.11<br>(Prescribed under Rule 61 of GFR 1963)<br>Report of examination or Test of Pressure Vessel or Plant
+      {% else %}
+        {{ config.label }}<br>{{ config.rule }}
+      {% endif %}
+    </td>
+    <td style="width:33%; text-align:right; font-weight:400;">Date:<br><strong>{{ report.report_date.strftime('%d-%m-%Y') if report.report_date else '' }}</strong></td>
+  </tr>
+</table>
+
+{% if form_type == 'form10' %}
+  <table>
+    <tr>
+      <td style="width:40%;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
+      <td style="width:30%;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
+      <td style="width:30%;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
+    </tr>
+  </table>
+  <table><tr><td class="header-bar-row" style="text-align:center; font-weight:700;">(As given in the license)</td></tr></table>
+
+  <table>
+    <tr><td class="no-col">1.</td><td class="label-col" style="width:32%;">Name of occupier of factory</td><td><strong>{{ data.occupier_name or '' }}</strong></td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">Address of factory</td><td>{{ (data.address or '')|replace('\n', '<br>')|safe }}</td></tr>
+    <tr>
+      <td class="no-col">3.</td>
+      <td class="label-col">Distinguishing number or mark (if any) and description sufficient to identify the lifting machine, chain, rope or lifting tackle</td>
+      <td>
+        <strong>{{ data.equipment_description or '' }}</strong><br>
+        {% if data.serial_no %}Sr. No.: {{ data.serial_no }}<br>{% endif %}
+        {% if data.make %}Make: {{ data.make }}<br>{% endif %}
+        {% if data.capacity %}Capacity: {{ data.capacity }}<br>{% endif %}
+        {% if data.location %}Location: {{ data.location }}{% endif %}
+      </td>
+    </tr>
+    <tr><td class="no-col">4.</td><td class="label-col">Date when the lifting machine, chain, rope or lifting tackle was first used in the factory.</td><td>{{ data.first_use_date or '' }}</td></tr>
+    <tr>
+      <td class="no-col">5.</td>
+      <td class="label-col">Date of each examination made under section 29(1)(a)(iii) and by whom it was carried out.</td>
+      <td>{{ data.examination_date or data.last_exam_date or '' }}{% if data.examined_by %} by {{ data.examined_by }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="no-col">6.</td>
+      <td class="label-col">Date and number of the certificate relating to any test and examination made under sub-rule (1) of rule 60 together with the name of the person who issued the certificate.</td>
+      <td>{{ data.certificate_details or '' }}</td>
+    </tr>
+    <tr>
+      <td class="no-col">7.</td>
+      <td class="label-col">Date of annealing or other heat treatment if the chain and lifting tackle carried out under sub-rule (5) of rule 60 and by whom it was carried out.</td>
+      <td>{{ data.heat_treatment_details or 'NA' }}</td>
+    </tr>
+    <tr>
+      <td class="no-col">8.</td>
+      <td class="label-col">Particulars of any defect found at any such examination or after annealing and affecting the safe working load and steps taken to remedy such defect.</td>
+      <td>{{ data.defects_found or 'Nil' }}</td>
+    </tr>
+  </table>
+
+  <p class="cert-para">
+    I certify that on <strong>{{ data.certification_date or '' }}</strong> the lifting machine, chain, rope or lifting tackle described above was thoroughly examined and that the above is a true report of the result of the examination.
+  </p>
+
+  <table class="due-sign-table">
+    <tr>
+      <td style="width:55%;"><div class="due-date">NEXT EXAMINATION DUE : {{ data.next_exam_date or '' }}</div></td>
+      <td style="width:45%;">
+        <div class="sign-name">{{ data.competent_person_name or '' }}</div>
+        <div class="sign-title">
+          {{ data.competent_person_title or 'Competent Person Declared by Director' }} / {{ data.competent_person_state or 'Gujarat' }} State,<br>
+          {{ data.competent_person_state or 'Gujarat' }} State, No: {{ data.competent_person_no or '' }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+{% elif form_type == 'form11' %}
+  <table>
+    <tr>
+      <td style="width:40%;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
+      <td style="width:30%;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
+      <td style="width:30%;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
+    </tr>
+  </table>
+  <table><tr><td class="header-bar-row" style="text-align:center; font-weight:700;">(As given in the license)</td></tr></table>
+
+  <table>
+    <tr><td class="no-col">1.</td><td class="label-col" style="width:32%;">Occupier (or owner) of Premises</td><td><strong>{{ data.occupier_name or '' }}</strong></td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">Address</td><td>{{ (data.address or '')|replace('\n', '<br>')|safe }}</td></tr>
+    <tr>
+      <td class="no-col">3.</td>
+      <td class="label-col">Name, description and distinctive number of pressure vessel or plant</td>
+      <td>
+        <strong>{{ data.vessel_description or data.vessel_name or '' }}</strong><br>
+        {% if data.tag_no %}Tag No.: {{ data.tag_no }}<br>{% endif %}
+        {% if data.location %}Location: {{ data.location }}<br>{% endif %}
+        {% if data.capacity %}Capacity: {{ data.capacity }}{% endif %}
+      </td>
+    </tr>
+    <tr><td class="no-col">4.</td><td class="label-col">Name and Address of Manufacturers</td><td>{{ data.manufacturer or 'Not know' }}</td></tr>
+    <tr>
+      <td class="no-col">5.</td>
+      <td class="label-col">Nature of Process (including temperature and pressure parameters)</td>
+      <td><strong>{{ data.nature_of_process or '' }}</strong></td>
+    </tr>
+    <tr>
+      <td class="no-col"></td><td class="label-col"></td>
+      <td>Temp: {{ data.temperature or '' }} &nbsp;&nbsp;|&nbsp;&nbsp; Pressure: {{ data.pressure or '' }}</td>
+    </tr>
+
+    <tr><td class="no-col">6.</td><td colspan="2" class="label-col">Particulars of pressure vessel or plant</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Date of Construction</td><td>{{ data.date_of_construction or '' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Thickness of Walls</td>
+      <td>Shell: {{ data.thickness_shell or '' }}
+        {% if data.thickness_jacket %} &nbsp;|&nbsp; Jacket: {{ data.thickness_jacket }}{% endif %}
+        {% if data.thickness_limpet %} &nbsp;|&nbsp; Limpet: {{ data.thickness_limpet }}{% endif %}
+        {% if data.thickness_pipeline %} &nbsp;|&nbsp; Pipeline: {{ data.thickness_pipeline }}{% endif %}
+      </td>
+    </tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Date on which it was first taken in to use</td><td>{{ data.first_use_date or '' }}</td></tr>
+    <tr><td class="no-col">d)</td><td class="label-col">Safe working Pressure</td><td>{{ data.safe_working_pressure or '' }}</td></tr>
+
+    <tr><td class="no-col">7.</td><td colspan="2" class="label-col">Date of</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Last external examination</td><td>{{ data.last_external_exam or '' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Last internal examination</td><td>{{ data.last_internal_exam or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Last hydraulic examination</td><td>{{ data.last_hydraulic_exam or '' }}</td></tr>
+    <tr><td class="no-col">d)</td><td class="label-col">Last ultrasonic or other non-destructive test</td><td>{{ data.last_ultrasonic_test or '' }}</td></tr>
+
+    <tr><td class="no-col">8.</td><td class="label-col">Whether lagging was removed for purposes of examination</td><td>{{ data.lagging_removed or 'Not Applicable' }}</td></tr>
+
+    <tr><td class="no-col">9.</td><td colspan="2" class="label-col">Description of examinations carried out and findings</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">External examination (give reason if it is not carried out six monthly)</td><td>{{ data.external_findings or 'Good' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Internal examination (give reason if it is not carried out annually)</td><td>{{ data.internal_findings or 'Good' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Hydraulic test (give reason if this is not carried out at an interval of 2 Years or 4 Years)</td><td>{{ data.last_hydraulic_exam_comment or '' }}</td></tr>
+    <tr><td class="no-col">d)</td><td class="label-col">Ultrasonic or other non-destructive test</td>
+      <td>{{ data.ultrasonic_findings or '' }}
+        {% if data.ultrasonic_shell %}<br>Shell: {{ data.ultrasonic_shell }}{% endif %}
+        {% if data.ultrasonic_jacket %} &nbsp;|&nbsp; Jacket: {{ data.ultrasonic_jacket }}{% endif %}
+        {% if data.ultrasonic_limpet %} &nbsp;|&nbsp; Limpet: {{ data.ultrasonic_limpet }}{% endif %}
+        {% if data.ultrasonic_pipeline %} &nbsp;|&nbsp; Pipeline: {{ data.ultrasonic_pipeline }}{% endif %}
+      </td>
+    </tr>
+
+    <tr><td class="no-col">10.</td><td colspan="2" class="label-col">Condition of pressure plants</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Vessel</td><td>{{ data.vessel_condition or 'Satisfactory' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Piping</td><td>{{ data.piping_condition or 'Satisfactory' }}</td></tr>
+  </table>
+
+  <div style="page-break-before: always;"></div>
+
+  <table>
+    <tr><td class="no-col">11.</td><td colspan="2" class="label-col">Condition of fitting and appliances</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Pressure Gauges</td><td>{{ data.pressure_gauges_condition or 'Available' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Safety Valve</td><td>{{ data.safety_valve_condition or 'Available' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Stop Valve</td><td>{{ data.stop_valve_condition or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">d)</td><td class="label-col">Reducing safety valve (give reason if not necessary)</td><td>{{ data.reducing_valve_condition or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">e)</td><td class="label-col">Additional Safety Valve (Required in case Reducing valve is necessary)</td><td>{{ data.additional_safety_valve_condition or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">f)</td><td class="label-col">Other Devices (Please specify particularly in case of Jacketed vessels)</td><td>{{ data.other_devices_condition or 'Not Applicable' }}</td></tr>
+
+    <tr>
+      <td class="no-col">12.</td>
+      <td class="label-col">Safe working pressure recommended after examinations (Specify the allowances made for conditions of working such as heat corrosion etc.)</td>
+      <td>{{ data.recommended_swp or data.safe_working_pressure or '' }}</td>
+    </tr>
+
+    <tr><td class="no-col">13.</td><td colspan="2" class="label-col"></td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Repairs (if any) required</td><td>{{ data.repairs_required or 'Nil' }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Period within which the repairs should be executed</td><td>{{ data.repairs_period or 'Nil' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Any other condition which the person making the examination thinks it necessary for securing safe working</td><td>{{ data.safety_conditions or '' }}</td></tr>
+
+    <tr><td class="no-col">14.</td><td class="label-col">Specify reduced working pressure pending repairs</td><td>{{ data.reduced_working_pressure or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">15.</td><td class="label-col">Safe working pressure calculated as per methods given in Sub-Rule 8 for thin walled pressure vessel or plant.</td><td>{{ data.calculated_swp or 'Nil' }}</td></tr>
+    <tr><td class="no-col">16.</td><td class="label-col">Other observations</td><td>{{ data.other_observations or '' }}</td></tr>
+  </table>
+
+  <p class="cert-para">
+    {{ (data.certification_text or '').replace('{date}', data.certification_date or '') }}
+  </p>
+
+  <table class="due-sign-table">
+    <tr>
+      <td style="width:55%;">
+        <div class="due-date">NEXT NDT & EXTERNAL TEST DUE : {{ data.next_ndt_date or '' }}</div>
+        <div class="due-date" style="margin-top:10px;">NEXT HYDROTEST DUE : {{ data.next_hydro_date or '' }}</div>
+      </td>
+      <td style="width:45%;">
+        <div class="sign-name">{{ data.competent_person_name or '' }}</div>
+        <div class="sign-title">
+          {{ data.competent_person_title or 'Competent Person Declared by Director' }},<br>
+          {{ data.competent_person_state or 'Gujarat' }} State, No: {{ data.competent_person_no or '' }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+{% else %}
+  {# PSV / Centrifuge -- unchanged generic layout, no reference format was given for these #}
+  <table>
+    <tr><th>Occupier</th><td colspan="3">{{ data.occupier_name or '' }} &mdash; {{ data.address or '' }}</td></tr>
+  </table>
+  {% for section_name, section_fields in config.sections %}
+    {% if section_name != 'Certification' %}
+    <div style="font-weight:700; font-size:12.5px; margin:14px 0 6px; border-bottom:1.5px solid #333; padding-bottom:3px;">{{ section_name }}</div>
+    <table>
+      {% for key, label, input_type, default in section_fields %}
+      <tr><th style="width:34%; background:#f2f4f7;">{{ label }}</th><td colspan="3">{{ data.get(key, '') or '-' }}</td></tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  {% endfor %}
+  {% for section_name, section_fields in config.sections %}
+    {% if section_name == 'Certification' %}
+    <div style="margin-top:22px;">
+      <div style="font-weight:700; font-size:12.5px; margin:14px 0 6px; border-bottom:1.5px solid #333; padding-bottom:3px;">Certification</div>
+      <p>{{ (data.certification_text or '').replace('{date}', data.certification_date or '') }}</p>
+      <table>
+        {% for key, label, input_type, default in section_fields %}
+          {% if key != 'certification_text' %}
+          <tr><th style="width:34%; background:#f2f4f7;">{{ label }}</th><td colspan="3">{{ data.get(key, '') or '-' }}</td></tr>
+          {% endif %}
+        {% endfor %}
+      </table>
+      <div style="margin-top:40px; border-top:1px solid #333; width:220px; padding-top:4px; font-size:10.5px;">Signature of Competent Person</div>
+    </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}

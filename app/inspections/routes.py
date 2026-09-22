@@ -2,7 +2,7 @@ from datetime import datetime, date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import InspectionReport, Company
+from app.models import InspectionReport, Company, CompanyProfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
@@ -12,7 +12,7 @@ import re
 inspections_bp = Blueprint("inspections", __name__, url_prefix="/inspections")
 
 
-def _html_to_pdf_bytes(html):
+def _html_to_pdf_bytes(html, header_html=None, footer_html=None, fit_one_page=False):
     """Renders an HTML string to PDF bytes, via a separate subprocess
     running app/pdf_worker.py (see that file for why it's a subprocess
     rather than an in-process Playwright call). Replaces WeasyPrint, which
@@ -22,6 +22,12 @@ def _html_to_pdf_bytes(html):
     Google Fonts) as a real browser would, so nothing about the PDF
     templates needs to change.
 
+    header_html/footer_html, if given, become Playwright's native
+    repeating page header/footer (see pdf_worker.py) -- the correct way
+    to get a letterhead that shows on every page with working page
+    numbers, rather than CSS running-element tricks that don't work
+    outside WeasyPrint.
+
     Raises RuntimeError with a clear setup message if Playwright itself,
     or its Chromium browser, isn't installed yet -- callers catch this
     the same way they used to catch weasyprint's ImportError.
@@ -29,13 +35,18 @@ def _html_to_pdf_bytes(html):
     import subprocess
     import sys
     import os
+    import json
 
     worker_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pdf_worker.py")
+    payload = json.dumps({
+        "html": html, "header_html": header_html, "footer_html": footer_html,
+        "fit_one_page": fit_one_page,
+    })
 
     try:
         result = subprocess.run(
             [sys.executable, worker_path],
-            input=html.encode("utf-8"),
+            input=payload.encode("utf-8"),
             capture_output=True,
             timeout=60,
         )
@@ -61,6 +72,58 @@ def _html_to_pdf_bytes(html):
         raise RuntimeError(f"PDF export failed: {stderr.strip()[-500:]}")
 
     return result.stdout
+
+
+def _logo_data_uri(profile=None):
+    """The org logo as a base64 data: URI, for embedding directly in PDF
+    headers/footers. PDFs now render inside a separate subprocess (see
+    pdf_worker.py) that has no connection to the running Flask server, so
+    a normal /static/... URL wouldn't resolve at all -- embedding the
+    image's actual bytes sidesteps that entirely.
+
+    Prefers profile.logo_filename (an uploaded logo from the My Company
+    settings page, stored under static/uploads/company/) when set;
+    otherwise falls back to the default static/images/logo.png.
+    """
+    import base64
+    import os
+
+    app_dir = os.path.dirname(os.path.dirname(__file__))
+
+    if profile and profile.logo_filename:
+        custom_path = os.path.join(app_dir, "static", "uploads", "company", profile.logo_filename)
+        if os.path.isfile(custom_path):
+            with open(custom_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+            ext = os.path.splitext(profile.logo_filename)[1].lstrip(".").lower() or "png"
+            return f"data:image/{ext};base64,{encoded}"
+
+    if not hasattr(_logo_data_uri, "_default_cached"):
+        default_path = os.path.join(app_dir, "static", "images", "logo.png")
+        with open(default_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        _logo_data_uri._default_cached = f"data:image/png;base64,{encoded}"
+    return _logo_data_uri._default_cached
+
+
+def _pdf_header_footer_html(profile):
+    """Renders the letterhead header and footer as self-contained HTML
+    fragments for Playwright's native header_template/footer_template PDF
+    options -- the correct, Chromium-supported way to get a letterhead
+    that repeats on every page, with working Page X of Y numbers.
+
+    (The previous approach -- CSS `position: running()` / `element()` in
+    the page body -- is a WeasyPrint-only extension. Under Chromium it
+    silently only shows on page 1, which is why multi-page PDFs were
+    missing their header/footer on every page after the first, and why
+    the page-number counter showed as static "Page 0 of 0" text instead
+    of counting.)
+    """
+    header_html = render_template(
+        "inspections/_pdf_header.html", profile=profile, logo_data_uri=_logo_data_uri(profile),
+    )
+    footer_html = render_template("inspections/_pdf_footer.html", profile=profile)
+    return header_html, footer_html
 
 
 def _companies_json():
@@ -226,8 +289,10 @@ def form9_pdf(report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type="form9").first_or_404()
 
     html = render_template("inspections/form9_pdf.html", report=report, data=report.data)
+    profile = CompanyProfile.query.first()
+    header_html, footer_html = _pdf_header_footer_html(profile)
     try:
-        pdf_bytes = _html_to_pdf_bytes(html)
+        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html, fit_one_page=True)
     except RuntimeError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("inspections.form9_list"))
@@ -654,8 +719,10 @@ def generic_pdf(form_type, report_id):
         "inspections/generic_pdf.html",
         report=report, data=report.data, config=config, form_type=form_type,
     )
+    profile = CompanyProfile.query.first()
+    header_html, footer_html = _pdf_header_footer_html(profile)
     try:
-        pdf_bytes = _html_to_pdf_bytes(html)
+        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html, fit_one_page=True)
     except RuntimeError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("inspections.generic_list", form_type=form_type))
@@ -980,8 +1047,10 @@ def form9_export_pdf():
         return redirect(url_for("inspections.form9_list", q=search))
 
     html = render_template("inspections/form9_bulk_pdf.html", reports=reports)
+    profile = CompanyProfile.query.first()
+    header_html, footer_html = _pdf_header_footer_html(profile)
     try:
-        pdf_bytes = _html_to_pdf_bytes(html)
+        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html)
     except RuntimeError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("inspections.form9_list", q=search))
@@ -1019,8 +1088,10 @@ def generic_export_pdf(form_type):
         return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
 
     html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type)
+    profile = CompanyProfile.query.first()
+    header_html, footer_html = _pdf_header_footer_html(profile)
     try:
-        pdf_bytes = _html_to_pdf_bytes(html)
+        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html)
     except RuntimeError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))

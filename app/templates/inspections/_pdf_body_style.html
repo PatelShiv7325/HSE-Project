@@ -1,0 +1,35 @@
+{# Shared body CSS for every inspection-report PDF's actual content
+   (the tables, section headers, signature block, etc.) -- included
+   directly in <head>, which is valid here since this is a <style> block,
+   not markup. The letterhead and footer are NOT here anymore: they're
+   rendered separately via Playwright's header_template/footer_template
+   PDF options (see _pdf_header.html, _pdf_footer.html, and
+   _pdf_header_footer_html() in app/inspections/routes.py) so they
+   actually repeat on every page under Chromium, with working page
+   numbers -- the CSS `position: running()` / `element()` approach this
+   replaced is a WeasyPrint-only extension that silently only rendered on
+   page 1 once PDFs switched to Chromium. #}
+<style>
+  @page { size: A4; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica", Arial, sans-serif;
+    font-size: 10.5px;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 3mm 6mm 4mm 6mm;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  td, th { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; font-size: 10px; }
+  .no-col { width: 22px; text-align: center; font-weight: 700; }
+  .label-col { font-weight: 600; }
+  .header-bar-row td { background: #f0f2f5; font-weight: 700; text-align: center; }
+  .cert-para { font-size: 10px; margin: 10px 0; text-align: justify; }
+  .due-sign-table td { border: 1px solid #999; padding: 10px; vertical-align: middle; }
+  .due-date { color: #C0272D; font-weight: 700; text-align: center; }
+  .sign-name { font-weight: 700; text-align: center; }
+  .sign-title { font-size: 8.5px; text-align: center; color: #444; }
+</style>
