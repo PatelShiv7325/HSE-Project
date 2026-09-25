@@ -7,3 +7,4 @@ email-validator==2.1.0
 Flask-Mail==0.9.1
 playwright==1.47.0
 gunicorn==23.0.0
+psycopg[binary]==3.2.3
