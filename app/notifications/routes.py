@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models import WhatsAppLog, Lead, MessageTemplate, ConfigSetting, EmailLog
-from datetime import datetime
+from datetime import datetime, timedelta
 from email_service import get_smtp_settings, save_smtp_settings, send_email
 
 notifications_bp = Blueprint("notifications", __name__, url_prefix="/notifications")
@@ -141,7 +141,9 @@ def whatsapp_logs():
     if date_filter:
         try:
             day = datetime.strptime(date_filter, "%Y-%m-%d").date()
-            query = query.filter(db.func.date(WhatsAppLog.sent_at) == day.isoformat())
+            day_start = datetime.combine(day, datetime.min.time())
+            day_end = day_start + timedelta(days=1)
+            query = query.filter(WhatsAppLog.sent_at >= day_start, WhatsAppLog.sent_at < day_end)
         except ValueError:
             pass
 
@@ -166,7 +168,10 @@ def whatsapp_logs():
         total_queued=WhatsAppLog.query.filter_by(status="pending").count(),
         total_duplicate=WhatsAppLog.query.filter_by(status="duplicate_skipped").count(),
         total_failed=WhatsAppLog.query.filter_by(status="failed").count(),
-        total_today=WhatsAppLog.query.filter(db.func.date(WhatsAppLog.sent_at) == today.isoformat()).count(),
+        total_today=WhatsAppLog.query.filter(
+            WhatsAppLog.sent_at >= datetime.combine(today, datetime.min.time()),
+            WhatsAppLog.sent_at < datetime.combine(today, datetime.min.time()) + timedelta(days=1),
+        ).count(),
     )
 
 
