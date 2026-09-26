@@ -4,3 +4,4 @@ app_OLD_BACKUP/
 app_OLD_BACKUP_2/
 .env
 hse.db
+.git_broken_backup/
