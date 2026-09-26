@@ -282,6 +282,14 @@ def employee_dashboard():
     )
 
 
+def _month_bucket(column):
+    """Groups a date/datetime column by year-month, working on both
+    SQLite (local dev) and PostgreSQL (Render production)."""
+    if db.engine.dialect.name == "postgresql":
+        return func.to_char(column, "YYYY-MM")
+    return func.strftime("%Y-%m", column)
+
+
 @admin_bp.route("/dashboard/chart-data")
 @login_required
 def chart_data():
@@ -292,10 +300,10 @@ def chart_data():
     # ---- Business Growth (bar): new leads per month, last 12 months ----
     monthly_counts = (
         db.session.query(
-            func.strftime("%Y-%m", Lead.created_at), func.count(Lead.id)
+            _month_bucket(Lead.created_at), func.count(Lead.id)
         )
         .filter(Lead.created_at >= twelve_months_ago)
-        .group_by(func.strftime("%Y-%m", Lead.created_at))
+        .group_by(_month_bucket(Lead.created_at))
         .all()
     )
 
@@ -330,34 +338,34 @@ def chart_data():
     # ---- Payment Trend (line): total payment amount logged per month, any status ----
     payment_trend_rows = (
         db.session.query(
-            func.strftime("%Y-%m", Payment.date), func.coalesce(func.sum(Payment.amount), 0)
+            _month_bucket(Payment.date), func.coalesce(func.sum(Payment.amount), 0)
         )
         .filter(Payment.date >= twelve_months_ago)
-        .group_by(func.strftime("%Y-%m", Payment.date))
+        .group_by(_month_bucket(Payment.date))
         .all()
     )
 
     # ---- Monthly Revenue (area): RECEIVED-only payment amount per month ----
     monthly_revenue_rows = (
         db.session.query(
-            func.strftime("%Y-%m", Payment.date), func.coalesce(func.sum(Payment.amount), 0)
+            _month_bucket(Payment.date), func.coalesce(func.sum(Payment.amount), 0)
         )
         .filter(Payment.date >= twelve_months_ago, Payment.status == "received")
-        .group_by(func.strftime("%Y-%m", Payment.date))
+        .group_by(_month_bucket(Payment.date))
         .all()
     )
 
     # ---- Overdue Trend (line): overdue work-stage count per month, last 6 months ----
     overdue_trend_rows = (
         db.session.query(
-            func.strftime("%Y-%m", WorkStage.due_date), func.count(WorkStage.id)
+            _month_bucket(WorkStage.due_date), func.count(WorkStage.id)
         )
         .filter(
             WorkStage.status != "done",
             WorkStage.due_date < now,
             WorkStage.due_date >= six_months_ago,
         )
-        .group_by(func.strftime("%Y-%m", WorkStage.due_date))
+        .group_by(_month_bucket(WorkStage.due_date))
         .all()
     )
 
