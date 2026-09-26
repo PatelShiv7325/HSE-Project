@@ -281,14 +281,12 @@ def employee_dashboard():
         progress_pct=progress_pct,
     )
 
-
 def _month_bucket(column):
     """Groups a date/datetime column by year-month, working on both
     SQLite (local dev) and PostgreSQL (Render production)."""
     if db.engine.dialect.name == "postgresql":
         return func.to_char(column, "YYYY-MM")
     return func.strftime("%Y-%m", column)
-
 
 @admin_bp.route("/dashboard/chart-data")
 @login_required
