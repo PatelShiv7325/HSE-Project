@@ -4,7 +4,8 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import InspectionReport, Company, CompanyProfile
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from openpyxl.worksheet.properties import PageSetupProperties
 from openpyxl.utils import get_column_letter
 from io import BytesIO
 import re
@@ -961,75 +962,278 @@ def _company_display_name(report):
     return (report.company.name if report.company_id and report.company else None) or report.occupier_name or "-"
 
 
-def _build_excel_registry(form_type, reports, label):
-    renewed_source_ids = _renewed_source_ids()
-    extra_columns = EXCEL_COLUMNS.get(form_type, [])
+# ---------------------------------------------------------------------------
+# Excel registry export -- ONE layout for every form in the Inspections menu
+# (Form 9, Form 10, Form 11, PSV, Centrifuge), matching the "ECS index F-10"
+# PDF:
+#   * consultant name / client name / report title at the top
+#   * one grey group row per equipment type
+#   * Sr. No. restarts at 1 inside every group
+#   * columns: Sr. No. | Certificate No. | Description | Tag No. | Capacity |
+#              Location | Insp. Date | Due Date
+#   * one sheet per client company, A4 portrait, header row repeats on every
+#     printed page, "Page X of Y" footer
+#
+# To change what a form shows, edit only its entry in EXCEL_LAYOUT below.
+#   group     : data keys tried in order for the grey group heading
+#   group_default : heading used when none of those keys has a value
+#   desc      : lines of the Description cell as (label, [keys], always_show)
+#               always_show=True prints "Label : -" even when empty
+#   tag / cap / loc : data keys tried in order for those columns
+#   insp / due: data keys tried in order for the two date columns
+# ---------------------------------------------------------------------------
 
-    headers = ["Sr No.", "Report No.", "Report Date", "Company / Occupier"]
-    headers += [col_label for col_label, _key in extra_columns]
-    headers += ["Due Date", "Days Left", "Status"]
+EXCEL_LAYOUT = {
+    "form9": {
+        "title": "INSPECTION & TESTING REPORT IN FORM NO. 9 AS PER GFR",
+        "group": ["hoist_description"], "group_default": "Hoist / Lift",
+        "desc": [("Make", ["hoist_make"], True),
+                 ("No. of Floors", ["no_of_floors"], False),
+                 ("Max Safe Load", ["max_safe_load"], False)],
+        "tag": ["tag_no"], "cap": ["capacity"], "cap_header": "Capacity",
+        "loc": ["location"],
+        "insp": ["certification_date"],
+        "due": ["next_exam_date"],
+    },
+    "form10": {
+        "title": "INSPECTION & TESTING REPORT IN FORM NO. 10 AS PER GFR",
+        "group": ["equipment_description"], "group_default": "Other",
+        # model / engine_no / vehicle_reg_no / span only print if you have
+        # added those fields to the Form 10 config (they are optional).
+        "desc": [("Make", ["make"], True),
+                 ("Model", ["model"], False),
+                 ("Engine No.", ["engine_no"], False),
+                 ("Reg. No.", ["vehicle_reg_no"], False),
+                 ("Span", ["span"], False)],
+        "tag": ["serial_no"], "cap": ["capacity"], "cap_header": "Capacity",
+        "loc": ["location"],
+        "insp": ["examination_date", "last_exam_date", "certification_date"],
+        "due": ["next_exam_date"],
+    },
+    "form11": {
+        "title": "INSPECTION & TESTING REPORT IN FORM NO. 11 AS PER GFR",
+        "group": ["vessel_name"], "group_default": "Pressure Vessel",
+        "desc": [("Description", ["vessel_description"], False),
+                 ("Make", ["manufacturer"], False),
+                 ("SWP", ["safe_working_pressure"], False)],
+        "tag": ["tag_no"], "cap": ["capacity"], "cap_header": "Capacity",
+        "loc": ["location"],
+        "insp": ["certification_date", "last_exam_date"],
+        "due": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
+    },
+    "psv": {
+        "title": "INSPECTION & TESTING REPORT OF PRESSURE SAFETY VALVES",
+        "group": [], "group_default": "Pressure Safety Valve",
+        "desc": [("Make", ["make"], True),
+                 ("Year of Mfg", ["year_of_mfg"], False)],
+        "tag": ["tag_no"], "cap": ["set_pressure"], "cap_header": "Set Pressure",
+        "loc": ["fitted_location"],
+        "insp": ["cal_date", "certification_date"],
+        "due": ["next_exam_date", "cal_due"],
+    },
+    "centrifuge": {
+        "title": "INSPECTION & TESTING REPORT OF CENTRIFUGE MACHINES",
+        "group": ["machine_name"], "group_default": "Centrifuge Machine",
+        "desc": [("Description", ["machine_name_description"], False),
+                 ("Size", ["machine_size"], False),
+                 ("Speed", ["operating_speed_stamped", "basket_speed"], False)],
+        "tag": ["tag_no"], "cap": ["capacity"], "cap_header": "Capacity",
+        "loc": ["location"],
+        "insp": ["date_of_examination", "last_exam_date", "certification_date"],
+        "due": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
+    },
+}
+
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%d/%m/%y", "%d-%m-%y")
+
+
+def _first_value(data, keys):
+    """First non-empty value among data[key] for key in keys, as a string."""
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _any_date(value):
+    """Turn whatever is stored (ISO string, dd/mm/yyyy text, date object)
+    into a date, or None if it isn't a recognisable date."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _date_cell(value):
+    """Returns (cell_value, is_real_date). Real dates are written as true
+    Excel dates (sortable/filterable); anything unparseable stays as text."""
+    parsed = _any_date(value)
+    if parsed:
+        return parsed, True
+    return (str(value).strip() if value else ""), False
+
+
+def _description_cell(data, layout):
+    """Multi-line Description cell, e.g.  Make : ACE / Model : AF30E."""
+    lines = []
+    for label, keys, always in layout["desc"]:
+        value = _first_value(data, keys)
+        if label == "Make" and value.lower().startswith("make"):
+            lines.append(value)                    # user already typed "Make : ..."
+        elif value:
+            lines.append(f"{label} : {value}")
+        elif always:
+            lines.append(f"{label} : -")
+    return "\n".join(lines)
+
+
+def _wrapped_lines(text, width_chars):
+    """Rough count of visual lines a cell needs, so row heights look right."""
+    total = 0
+    for part in str(text or "").split("\n"):
+        total += max(1, -(-len(part) // max(int(width_chars), 1)))
+    return total
+
+
+def _build_excel_registry(form_type, reports, label):
+    from flask import current_app
+
+    layout = EXCEL_LAYOUT.get(form_type) or EXCEL_LAYOUT["form10"]
+
+    profile = CompanyProfile.query.first()
+    consultant = (
+        (profile.legal_name if profile and profile.legal_name else None)
+        or current_app.config.get("COMPANY_NAME", "HSE Project")
+    )
+
+    thin = Side(style="thin", color="000000")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    grey = PatternFill("solid", start_color="F2F2F2", end_color="F2F2F2")
+
+    headers = ["Sr.\nNo.", "Certificate No.", "Description", "Tag No.",
+               layout["cap_header"], "Location", "Insp. Date", "Due Date"]
+    widths = [7, 17, 30, 24, 11, 20, 13, 13]
+    ncols = len(headers)
+
+    # ---- one sheet per client company (first-appearance order) ----------
+    by_company = {}
+    for r in sorted(reports, key=lambda x: x.id):
+        by_company.setdefault(_company_display_name(r), []).append(r)
 
     wb = Workbook()
-    ws = wb.active
-    # Excel sheet names can't contain \ / ? * [ ] or exceed 31 chars --
-    # form labels like "Form 10 - Lifting Machines / Cranes" have a slash,
-    # so strip anything invalid rather than let openpyxl reject it.
-    safe_title = re.sub(r'[\\/?*\[\]:]', '-', label)[:31]
-    ws.title = safe_title
+    wb.remove(wb.active)
+    used_titles = set()
 
-    col_count = len(headers)
+    for company_name, company_reports in by_company.items():
+        title = re.sub(r'[\\/?*\[\]:]', '-', company_name)[:31] or "Registry"
+        base, n = title, 2
+        while title.lower() in used_titles:          # sheet names must be unique
+            title = f"{base[:28]}-{n}"
+            n += 1
+        used_titles.add(title.lower())
+        ws = wb.create_sheet(title)
 
-    # Branding header rows (merged across the full table width), same idea
-    # as the "COMPANY NAME / TAGLINE / REGISTRY TITLE" block used elsewhere.
-    from flask import current_app
-    company_name = current_app.config.get("COMPANY_NAME", "HSE Project")
+        for c, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(c)].width = w
 
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=col_count)
-    ws.cell(row=1, column=1, value=company_name.upper()).font = Font(bold=True, size=14)
-    ws.cell(row=1, column=1).alignment = Alignment(horizontal="center")
-
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=col_count)
-    ws.cell(row=2, column=1, value=f"{label.upper()} REGISTRY").font = Font(bold=True, size=11)
-    ws.cell(row=2, column=1).alignment = Alignment(horizontal="center")
-
-    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
-    ws.cell(row=3, column=1, value=f"Generated {datetime.utcnow().strftime('%d-%m-%Y %H:%M')} UTC").font = Font(italic=True, size=9)
-    ws.cell(row=3, column=1).alignment = Alignment(horizontal="center")
-
-    header_row = 5
-    for c, h in enumerate(headers, start=1):
-        cell = ws.cell(row=header_row, column=c, value=h)
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center", wrap_text=True)
-
-    row_idx = header_row + 1
-    for i, r in enumerate(reports, start=1):
-        status, due_date, days_left = _status_and_days(r, renewed_source_ids)
-        data = r.data or {}
-        row = [
-            i,
-            r.report_no,
-            r.report_date.strftime("%d-%m-%Y") if r.report_date else "",
-            _company_display_name(r),
+        # ---- title block ------------------------------------------------
+        titles = [
+            (consultant.upper(), Font(bold=True, size=12)),
+            (company_name, Font(size=11, underline="single")),
+            (layout["title"], Font(size=10)),
         ]
-        row += [(data.get(key) or "NA") for _label, key in extra_columns]
-        row += [
-            due_date.strftime("%d-%m-%Y") if due_date else "NA",
-            days_left if days_left is not None else "NA",
-            status,
-        ]
-        for c, value in enumerate(row, start=1):
-            ws.cell(row=row_idx, column=c, value=value)
-        row_idx += 1
+        for i, (text, font) in enumerate(titles, start=1):
+            ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=ncols)
+            cell = ws.cell(row=i, column=1, value=text)
+            cell.font = font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.row_dimensions[i].height = 20
 
-    # Auto-size columns based on header/content length.
-    for c in range(1, col_count + 1):
-        max_len = len(str(headers[c - 1]))
-        for r_idx in range(header_row + 1, row_idx):
-            v = ws.cell(row=r_idx, column=c).value
-            if v is not None:
-                max_len = max(max_len, len(str(v)))
-        ws.column_dimensions[get_column_letter(c)].width = max_len + 4
+        # ---- header row -------------------------------------------------
+        header_row = 5
+        for c, h in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=c, value=h)
+            cell.font = Font(size=10)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = box
+        ws.row_dimensions[header_row].height = 32
+
+        # ---- group by equipment type (first-appearance order) ----------
+        groups = {}
+        for r in company_reports:
+            name = _first_value(r.data or {}, layout["group"]) or layout["group_default"]
+            groups.setdefault(name, []).append(r)
+
+        row_idx = header_row + 1
+        for group_name, group_reports in groups.items():
+            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=ncols)
+            gcell = ws.cell(row=row_idx, column=1, value=group_name)
+            gcell.font = Font(size=10)
+            gcell.fill = grey
+            gcell.alignment = Alignment(horizontal="left", vertical="center")
+            for c in range(1, ncols + 1):
+                ws.cell(row=row_idx, column=c).border = box
+            ws.row_dimensions[row_idx].height = 18
+            row_idx += 1
+
+            for sr, r in enumerate(group_reports, start=1):
+                data = r.data or {}
+                description = _description_cell(data, layout)
+                tag = _first_value(data, layout["tag"])
+                capacity = _first_value(data, layout["cap"])
+                location = _first_value(data, layout["loc"])
+
+                insp_raw = _first_value(data, layout["insp"]) or r.report_date
+                insp_val, insp_is_date = _date_cell(insp_raw)
+                due_val, due_is_date = _date_cell(_first_value(data, layout["due"]))
+
+                values = [sr, r.report_no, description, tag, capacity, location,
+                          insp_val, due_val]
+                for c, value in enumerate(values, start=1):
+                    cell = ws.cell(row=row_idx, column=c, value=value)
+                    cell.font = Font(size=10)
+                    cell.border = box
+                    cell.alignment = Alignment(
+                        horizontal="center" if (c == 1 or (c >= 5 and c != 6)) else "left",
+                        vertical="top", wrap_text=True,
+                    )
+                if insp_is_date:
+                    ws.cell(row=row_idx, column=7).number_format = "DD/MM/YYYY"
+                if due_is_date:
+                    ws.cell(row=row_idx, column=8).number_format = "DD/MM/YYYY"
+
+                lines = max(
+                    _wrapped_lines(description, widths[2] - 2),
+                    _wrapped_lines(tag, widths[3] - 2),
+                    _wrapped_lines(location, widths[5] - 2),
+                    _wrapped_lines(capacity, widths[4] - 2),
+                    _wrapped_lines(r.report_no, widths[1] - 2),
+                )
+                ws.row_dimensions[row_idx].height = max(18, 13.5 * lines + 4)
+                row_idx += 1
+
+        # ---- print / view setup ----------------------------------------
+        ws.freeze_panes = ws.cell(row=header_row + 1, column=1)
+        ws.print_title_rows = f"{header_row}:{header_row}"
+        ws.page_setup.orientation = "portrait"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        ws.page_margins.left = ws.page_margins.right = 0.4
+        ws.page_margins.top = ws.page_margins.bottom = 0.5
+        ws.oddFooter.center.text = "Page &P of &N"
+        ws.sheet_view.showGridLines = False
 
     buffer = BytesIO()
     wb.save(buffer)
