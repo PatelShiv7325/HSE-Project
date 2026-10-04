@@ -63,6 +63,9 @@
       {% for key, label, input_type, default in section_fields %}
       {% set is_exam_extra = (key.endswith('_date') and key[:-5] in exam_keys) or (key.endswith('_comment') and key[:-8] in exam_keys) %}
       {% if not is_exam_extra %}
+      {% if key in (config.subheads or {}) %}
+      <div style="grid-column:1 / -1; margin-top:6px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#5b6b82;">{{ config.subheads[key] }}</div>
+      {% endif %}
       {% set val = data.get(key, field_defaults.get(key, '')) %}
       {% set opts = (config.options or {}).get(key) %}
       {% set unit = (config.units or {}).get(key) %}
@@ -71,7 +74,7 @@
         <label style="display:block; margin-bottom:3px;">{{ label }}{% if req %} <span style="color:#c0392b;">*</span>{% endif %}</label>
         {% if key in exam_keys %}
           {# First Time / By Manufacturer / Date -- Date reveals a date box + a comment box #}
-          {% set builtin = ['First Time', 'By Manufacturer', 'Date'] %}
+          {% set builtin = (config.exam_choices or {}).get(key) or ['First Time', 'By Manufacturer', 'Date'] %}
           <select name="{{ key }}" class="exam-type" data-exam="{{ key }}">
             <option value="">-- Select --</option>
             {% for o in builtin %}<option value="{{ o }}" {{ 'selected' if val == o }}>{{ o }}</option>{% endfor %}
@@ -79,13 +82,13 @@
           </select>
           <div class="exam-extra" data-exam-extra="{{ key }}" style="display:none; margin-top:8px; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
             <div>
-              <span style="font-size:11px; color:#777; text-transform:uppercase;">Exam Date</span>
+              <span style="font-size:11px; color:#777; text-transform:uppercase;">{{ (config.exam_date_labels or {}).get(key, 'Exam Date') }}</span>
               <input type="date" name="{{ key }}_date" value="{{ data.get(key ~ '_date', '') }}">
             </div>
-            <div>
+            {% if key not in (config.exam_no_comment or []) %}<div>
               <span style="font-size:11px; color:#777; text-transform:uppercase;">Findings / Comment</span>
               <input type="text" name="{{ key }}_comment" value="{{ data.get(key ~ '_comment', '') }}" placeholder="e.g. Tested at 15.0 kg/cm&sup2; for 30 mins">
-            </div>
+            </div>{% endif %}
           </div>
         {% elif input_type == 'textarea' %}
           <textarea name="{{ key }}" rows="3">{{ val }}</textarea>
@@ -93,8 +96,8 @@
           <input type="date" name="{{ key }}" value="{{ val }}" {{ 'required' if req }}>
         {% else %}
           {% if unit %}<div class="unit-box">{% endif %}
-          <input type="text" name="{{ key }}" value="{{ val|dmy if key == 'date_of_construction' else val }}" {{ 'required' if req }}
-                 {% if opts %}list="opts_{{ key }}" autocomplete="off" placeholder="Select or type..."{% elif key == 'date_of_construction' %}placeholder="e.g. 2022"{% elif unit %}placeholder="e.g. 10"{% endif %}>
+          <input type="text" name="{{ key }}" value="{{ val|dmy if key in ('date_of_construction', 'first_use_date') else val }}" {{ 'required' if req }}
+                 {% if opts %}list="opts_{{ key }}" autocomplete="off" placeholder="Select or type..."{% elif (config.placeholders or {}).get(key) %}placeholder="{{ config.placeholders[key] }}"{% elif unit %}placeholder="e.g. 10"{% endif %}>
           {% if unit %}<span class="unit-tag">{{ unit }}</span></div>{% endif %}
           {% if opts %}
           <datalist id="opts_{{ key }}">
@@ -224,7 +227,23 @@
     });
   }
 
+  // Section 6 DP / SWP are copied into item 12 while that box is empty or still in sync.
+  var MIRROR = {{ (config.mirror or {})|tojson }};
+  function setupMirror() {
+    Object.keys(MIRROR).forEach(function (srcName) {
+      var src = F(srcName), dst = F(MIRROR[srcName]);
+      if (!src || !dst) return;
+      var last = src.value;
+      if (!dst.value) dst.value = src.value;
+      src.addEventListener('input', function () {
+        if (dst.value === '' || dst.value === last) dst.value = src.value;
+        last = src.value;
+      });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    setupMirror();
     var cert = F('certification_date');
     if (cert) {
       ['change', 'input', 'blur'].forEach(function (ev) {

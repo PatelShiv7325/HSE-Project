@@ -534,8 +534,6 @@ FORMS_CONFIG = {
             ("5) Examination Details", [
                 ("examination_details_text", "Date of each examination made under section 29(1)(a)(iii) and by whom it was carried out", "textarea", None),
                 ("last_exam_date", "Last Exam Date", "date", None),
-                ("examination_date", "Examination Date", "text", None),
-                ("examined_by", "Examined By", "text", None),
             ]),
             ("6) Certificate of Test (Rule 60/1)", [
                 ("certificate_details", "Date and number of the certificate relating to any test and examination made under sub-rule (1) of rule 60, with the name of the person who issued it", "textarea", None),
@@ -573,6 +571,7 @@ FORMS_CONFIG = {
         "units": {
             "capacity": "KL", "temperature": "\u00b0C", "pressure": "kg/cm\u00b2",
             "safe_working_pressure": "KG/CM\u00b2", "recommended_swp": "KG/CM\u00b2",
+            "design_pressure": "KG/CM\u00b2", "recommended_dp": "KG/CM\u00b2",
             "reduced_working_pressure": "KG/CM\u00b2", "calculated_swp": "KG/CM\u00b2",
             "thickness_shell": "mm", "thickness_jacket": "mm", "thickness_limpet": "mm",
             "thickness_pipeline": "mm", "ultrasonic_shell": "mm", "ultrasonic_jacket": "mm",
@@ -585,6 +584,25 @@ FORMS_CONFIG = {
             "last_hydraulic_exam": "7c) Last hydraulic examination",
             "last_ultrasonic_test": "7d) Last ultrasonic / NDT",
         },
+        # Small headings shown above a field inside a section (key -> heading).
+        "subheads": {
+            "date_of_construction": "(a) Date of Construction",
+            "thickness_shell": "(b) Thickness of Walls",
+            "first_use_date": "(c) Date on which it was first taken in to use",
+            "design_pressure": "(d) Safe working Pressure recommended by the Manufacturer",
+        },
+        # Hint text inside empty boxes (key -> hint).
+        "placeholders": {
+            "date_of_construction": "e.g. 2022", "first_use_date": "e.g. 15-01-2023",
+            "thickness_shell": "Shell e.g. 10.0", "thickness_jacket": "Dish e.g. 12.0",
+            "thickness_limpet": "Limpet e.g. 8.0", "thickness_pipeline": "Pipeline e.g. 6.0",
+            "design_pressure": "DP e.g. 8.8", "safe_working_pressure": "SWP e.g. 7.0",
+            "recommended_dp": "DP e.g. 8.8", "recommended_swp": "SWP e.g. 7.0",
+            "ultrasonic_shell": "Shell e.g. 10.0", "ultrasonic_jacket": "Dish e.g. 12.0",
+            "ultrasonic_limpet": "Limpet e.g. 8.0", "ultrasonic_pipeline": "Pipeline e.g. 6.0",
+        },
+        # Typing in the left box copies into the right box while that one is still empty / in sync.
+        "mirror": {"design_pressure": "recommended_dp", "safe_working_pressure": "recommended_swp"},
         # Must be filled before saving (checked in the browser AND on the server).
         "required": ["certification_date", "next_ndt_date", "next_hydro_date",
                      "reminder_date", "competent_person_name", "competent_person_no"],
@@ -627,15 +645,16 @@ FORMS_CONFIG = {
                 ("pressure", "Pressure", "text", None),
             ]),
             ("6) Particulars of Pressure Vessel or Plant", [
-                ("date_of_construction", "Date of Construction", "date", None),
-                ("safe_working_pressure", "Safe Working Pressure", "text", None),
-                ("thickness_shell", "Shell Thickness", "text", None),
-                ("thickness_jacket", "Jacket Thickness", "text", None),
-                ("thickness_limpet", "Limpet Thickness", "text", None),
-                ("thickness_pipeline", "Pipeline Thickness", "text", None),
+                ("date_of_construction", "Date of Construction", "text", None),
+                ("thickness_shell", "Shell", "text", None),
+                ("thickness_jacket", "Dish", "text", None),
+                ("thickness_limpet", "Limpet", "text", None),
+                ("thickness_pipeline", "Pipeline", "text", None),
+                ("first_use_date", "Date on which it was first taken in to use", "text", None),
+                ("design_pressure", "Design Pressure (DP)", "text", None),
+                ("safe_working_pressure", "Safe Working Pressure (SWP)", "text", None),
             ]),
             ("7) Date of", [
-                ("first_use_date", "First Use Date", "date", None),
                 ("last_exam_date", "Last Exam Date", "date", None),
                 ("last_external_exam", "Last External Exam", "text", None),
                 ("last_external_exam_date", "Last External Exam Date", "date", None),
@@ -657,7 +676,7 @@ FORMS_CONFIG = {
                 ("internal_findings", "Internal Findings", "textarea", None),
                 ("ultrasonic_findings", "Ultrasonic Findings", "textarea", None),
                 ("ultrasonic_shell", "Ultrasonic - Shell", "text", None),
-                ("ultrasonic_jacket", "Ultrasonic - Jacket", "text", None),
+                ("ultrasonic_jacket", "Ultrasonic - Dish", "text", None),
                 ("ultrasonic_limpet", "Ultrasonic - Limpet", "text", None),
                 ("ultrasonic_pipeline", "Ultrasonic - Pipeline", "text", None),
             ]),
@@ -674,7 +693,8 @@ FORMS_CONFIG = {
                 ("other_devices_condition", "Other Devices Condition", "text", None),
             ]),
             ("12) Safe Working Pressure Recommended After Examinations", [
-                ("recommended_swp", "Recommended SWP", "text", None),
+                ("recommended_dp", "Design Pressure (DP)", "text", None),
+                ("recommended_swp", "Safe Working Pressure (SWP)", "text", None),
             ]),
             ("13) Repairs & Other Conditions", [
                 ("repairs_required", "Repairs Required", "textarea", None),
@@ -779,6 +799,11 @@ FORMS_CONFIG = {
         "rule": "Centrifuge Machine Test Report",
         "custom_fields_section": "3) Machine Identity",
         "units": {"basket_speed": "RPM", "operating_speed_stamped": "RPM"},
+        # "Last Examination Option" selector: Date shows the date box (last_exam_date).
+        "exam_types": {"last_exam": "Last Examination Option"},
+        "exam_choices": {"last_exam": ["Date", "First Time", "By Manufacturer"]},
+        "exam_no_comment": ["last_exam"],
+        "exam_date_labels": {"last_exam": "Date of Last Examination"},
         "required": ["certification_date", "next_exam_date", "reminder_date",
                      "competent_person_name", "competent_person_no"],
         "auto_dates": True,
@@ -803,7 +828,7 @@ FORMS_CONFIG = {
                 ("manufacturer_name_address", "Manufacturer Name & Address", "textarea", None),
             ]),
             ("5) Machine Particulars", [
-                ("date_of_construction", "Date of Construction", "date", None),
+                ("date_of_construction", "Date of Construction", "text", None),
                 ("machine_size", "Machine Size", "text", None),
             ]),
             ("6) Machine Condition", [
@@ -821,7 +846,8 @@ FORMS_CONFIG = {
                 ("operating_speed_stamped", "Operating Speed (Stamped)", "text", None),
             ]),
             ("10) Last Examination", [
-                ("last_exam_date", "Last Exam Date", "date", None),
+                ("last_exam", "Last Examination Option", "text", "Date"),
+                ("last_exam_date", "Date of Last Examination", "date", None),
             ]),
             ("11) Remarks", [
                 ("remarks", "Remarks", "textarea", None),
@@ -839,8 +865,6 @@ FORMS_CONFIG = {
             ("Next Examination Dates", [
                 ("certification_date", "Certification Date", "date", "__today__"),
                 ("next_exam_date", "Next Exam Date", "date", None),
-                ("next_ndt_date", "Next NDT Date", "date", None),
-                ("next_hydro_date", "Next Hydro Date", "date", None),
                 ("reminder_date", "Reminder Date", "date", None),
             ]),
             ("Certifying Authority", [
@@ -1177,7 +1201,7 @@ DUE_DATE_KEYS = {
     "form10": ["next_exam_date"],
     "form11": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
     "psv": ["next_exam_date"],
-    "centrifuge": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
+    "centrifuge": ["next_exam_date"],
 }
 
 FORM_LABELS = {

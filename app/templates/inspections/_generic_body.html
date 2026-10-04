@@ -10,6 +10,13 @@
   {%- set t = (v|string|trim) -%}
   {%- if t and (t|replace('.','',1)).isdigit() -%}{{ t }} {{ unit }}{%- else -%}{{ v or '' }}{%- endif -%}
 {%- endmacro %}
+{# swp_dp: "SWP : 7.0 KG/CM² (DP : 8.8 KG/CM²)" #}
+{% macro swp_dp(swp, dp) -%}
+  {%- if swp and dp -%}SWP : {{ nu(swp, 'KG/CM²') }} (DP : {{ nu(dp, 'KG/CM²') }})
+  {%- elif swp -%}{{ nu(swp, 'KG/CM²') }}
+  {%- elif dp -%}DP : {{ nu(dp, 'KG/CM²') }}
+  {%- endif -%}
+{%- endmacro %}
 {% macro wu(v, unit) -%}
   {%- if not v -%}NA
   {%- elif (v|string|trim|upper) in ['NA','N.A.','N.A','N/A','NIL','NOT APPLICABLE','AVAILABLE','NOT AVAILABLE','SATISFACTORY','GOOD','FOUND OK','OK','NONE','-'] -%}{{ v }}
@@ -140,13 +147,13 @@
     <tr><td class="no-col">a)</td><td class="label-col">Date of Construction</td><td>{{ data.date_of_construction|dmy }}</td></tr>
     <tr><td class="no-col">b)</td><td class="label-col">Thickness of Walls</td>
       <td>Shell: {{ nu(data.thickness_shell, 'mm') }}
-        {% if data.thickness_jacket %} &nbsp;|&nbsp; Jacket: {{ nu(data.thickness_jacket, 'mm') }}{% endif %}
+        {% if data.thickness_jacket %} &nbsp;|&nbsp; Dish: {{ nu(data.thickness_jacket, 'mm') }}{% endif %}
         {% if data.thickness_limpet %} &nbsp;|&nbsp; Limpet: {{ nu(data.thickness_limpet, 'mm') }}{% endif %}
         {% if data.thickness_pipeline %} &nbsp;|&nbsp; Pipeline: {{ nu(data.thickness_pipeline, 'mm') }}{% endif %}
       </td>
     </tr>
     <tr><td class="no-col">c)</td><td class="label-col">Date on which it was first taken in to use</td><td>{{ data.first_use_date|dmy }}</td></tr>
-    <tr><td class="no-col">d)</td><td class="label-col">Safe working Pressure</td><td>{{ nu(data.safe_working_pressure, 'KG/CM²') }}</td></tr>
+    <tr><td class="no-col">d)</td><td class="label-col">Safe working Pressure</td><td>{{ swp_dp(data.safe_working_pressure, data.design_pressure) }}</td></tr>
 
     <tr><td class="no-col">7.</td><td colspan="2" class="label-col">Date of</td></tr>
     <tr><td class="no-col">a)</td><td class="label-col">Last external examination</td><td>{{ exam_text(data, 'last_external_exam') }}</td></tr>
@@ -163,7 +170,7 @@
     <tr><td class="no-col">d)</td><td class="label-col">Ultrasonic or other non-destructive test</td>
       <td>{{ data.ultrasonic_findings or '' }}
         {% if data.ultrasonic_shell %}<br>Shell: {{ nu(data.ultrasonic_shell, 'mm') }}{% endif %}
-        {% if data.ultrasonic_jacket %} &nbsp;|&nbsp; Jacket: {{ nu(data.ultrasonic_jacket, 'mm') }}{% endif %}
+        {% if data.ultrasonic_jacket %} &nbsp;|&nbsp; Dish: {{ nu(data.ultrasonic_jacket, 'mm') }}{% endif %}
         {% if data.ultrasonic_limpet %} &nbsp;|&nbsp; Limpet: {{ nu(data.ultrasonic_limpet, 'mm') }}{% endif %}
         {% if data.ultrasonic_pipeline %} &nbsp;|&nbsp; Pipeline: {{ nu(data.ultrasonic_pipeline, 'mm') }}{% endif %}
       </td>
@@ -188,7 +195,7 @@
     <tr>
       <td class="no-col">12.</td>
       <td class="label-col">Safe working pressure recommended after examinations (Specify the allowances made for conditions of working such as heat corrosion etc.)</td>
-      <td>{{ nu(data.recommended_swp or data.safe_working_pressure, 'KG/CM²') }}</td>
+      <td>{{ swp_dp(data.recommended_swp or data.safe_working_pressure, data.recommended_dp or data.design_pressure) }}</td>
     </tr>
 
     <tr><td class="no-col">13.</td><td colspan="2" class="label-col"></td></tr>
@@ -292,7 +299,7 @@
     <tr><td class="no-col">8.</td><td colspan="2" class="label-col">Earthing Provided</td><td>{{ data.earthing_provided or 'NA' }}</td></tr>
     <tr><td class="no-col">9.</td><td colspan="2" class="label-col">Basket Speed</td><td>{{ wu(data.basket_speed, 'RPM') }}</td></tr>
     <tr><td class="no-col"></td><td colspan="2" class="label-col">Operating Speed whether legibly stamped at easily visible place outer cover.</td><td>{{ wu(data.operating_speed_stamped, 'RPM') }}</td></tr>
-    <tr><td class="no-col">10.</td><td colspan="2" class="label-col">Date of last examination</td><td>{{ data.last_exam_date|dmy or 'NA' }}</td></tr>
+    <tr><td class="no-col">10.</td><td colspan="2" class="label-col">Date of last examination</td><td>{{ (exam_text(data, 'last_exam')|trim) or (data.last_exam_date|dmy) or 'NA' }}</td></tr>
     <tr><td class="no-col">11.</td><td colspan="2" class="label-col">Remarks</td><td>{{ data.remarks or 'NA' }}</td></tr>
     <tr><td class="no-col">12.</td><td colspan="2" class="label-col">Date of Examination</td><td>{{ data.date_of_examination|dmy or 'NA' }}</td></tr>
     <tr><td class="no-col">13.</td><td colspan="2" class="label-col">Particulars of any defects affecting the safety of the centrifuge machine found at any such thorough examination and steps taken to remedy such defects</td><td>{{ data.defects_and_remedies or 'NIL' }}</td></tr>
