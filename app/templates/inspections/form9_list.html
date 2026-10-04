@@ -37,9 +37,9 @@
       {% for r in reports %}
         <tr>
           <td>{{ r.report_no }}</td>
-          <td>{{ r.report_date.strftime('%d-%m-%Y') if r.report_date else '-' }}</td>
+          <td>{{ r.report_date|dmy('-') }}</td>
           <td>{{ r.occupier_name or '-' }}</td>
-          <td>{{ r.data.next_exam_date or '-' }}</td>
+          <td>{{ r.data.next_exam_date|dmy('-') }}</td>
           <td style="display:flex; gap:6px;">
             <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('inspections.form9_edit', report_id=r.id) }}">Edit</a>
             <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" target="_blank" href="{{ url_for('inspections.form9_pdf', report_id=r.id) }}">PDF</a>

@@ -82,6 +82,10 @@
       if (SKIP.indexOf(key) !== -1) return;
       if (onlyPrefix && key.indexOf(onlyPrefix) !== 0) return;
       var val = r.data[key];
+      if (key === 'custom_fields') {                      // Form 9 "Manage Custom Fields"
+        if (Array.isArray(val) && val.length && window.cfSetFields) window.cfSetFields(val);
+        return;
+      }
       if (val == null || val === '') return;            // never blank out a field
       var el = form.querySelector('[name="' + key + '"]');
       if (el) el.value = val;
@@ -96,15 +100,67 @@
     if (typeof autoFillExamDates === 'function') autoFillExamDates(true);
   }
 
+  // Finds the company to put in the Company box for a past report.
+  // 1) the report's own company link; 2) if it was saved without one,
+  // a company whose name matches the report's company / occupier / address
+  // text (ignoring M/S, Ltd, Limited, Pvt, punctuation); 3) otherwise the
+  // company name written at the start of the report's address is shown in
+  // the box as plain text (no link) so the field is never left empty.
+  var NOISE = /\b(m\/s|messrs|ltd|limited|pvt|private|co|company|corp|inc|llp)\b/g;
+  function norm(t) {
+    return (t || '').toString().toLowerCase().replace(NOISE, ' ')
+             .replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  // Company name = the start of the address, cut off where the street part
+  // begins (M/S SUNTROX FINECHEM LLP PLOT NO: D-3/16/1 ... -> M/S SUNTROX FINECHEM LLP)
+  var ADDR_START = /\b(plot|survey|s\.?\s?no|block|shed|unit|gala|gidc|g\.i\.d\.c|industrial|estate|road|rd|street|near|opp|opposite|behind|village|vill|at|post|po|ta|taluka|tal|dist|district|building|bldg|floor|sector|phase|nr|b\/h|h\.?\s?no|no)\b|[,;:\n()]|\s-\s|\d\//i;
+  function firstLine(t) {
+    t = (t || '').toString().replace(/\s+/g, ' ').trim();
+    var m = ADDR_START.exec(t);
+    var name = m && m.index > 2 ? t.slice(0, m.index) : t;
+    return name.replace(/[\s,;:.\-]+$/, '').trim();
+  }
+  function findCompany(r) {
+    var list = (typeof COMPANIES !== 'undefined' && COMPANIES) || [];
+    if (r.company_id) {
+      var byId = list.find(function (c) { return String(c.id) === String(r.company_id); });
+      return byId || { id: r.company_id, name: r.company_name };
+    }
+    var d = r.data || {};
+    var cands = [r.company_name, d.occupier_name, d.address, firstLine(d.address)]
+                  .map(norm).filter(Boolean);
+    var hit = list.find(function (c) {
+      var n = norm(c.name);
+      return n && cands.some(function (t) { return t === n || t.indexOf(n) !== -1 || (t.length > 3 && n.indexOf(t) !== -1); });
+    });
+    if (hit) return hit;
+    var txt = firstLine(d.address) || r.company_name || '';
+    return txt ? { id: '', name: txt } : null;
+  }
+
+  // Next report number = copied report's number with its last number +1
+  // (GHSEA/2026/SFL/2 -> GHSEA/2026/SFL/3). Still editable; duplicates are
+  // rejected on save as before.
+  function nextReportNo(no) {
+    var m = /^(.*?)(\d+)(\D*)$/.exec(no || '');
+    if (!m) return '';
+    var n = String(parseInt(m[2], 10) + 1);
+    while (n.length < m[2].length) n = '0' + n;
+    return m[1] + n + m[3];
+  }
+
   // Clicking a row in the popup
   window.cpApply = function (i) {
     var r = CURRENT[i];
     if (!r) return;
     var cs = document.getElementById('company_search');
     var cid = document.getElementById('company_id');
-    if (cid) cid.value = r.company_id || '';
-    if (cs) cs.value = r.company_id ? r.company_name : '';
+    var comp = findCompany(r);
+    if (cid) cid.value = comp ? comp.id : '';
+    if (cs) cs.value = comp ? comp.name : '';
     fillFromReport(r);
+    var rn = document.querySelector('form[method="post"] [name="report_no"]');
+    if (rn && !rn.value) rn.value = nextReportNo(r.report_no);
     recalcDates();
     cpClose();
   };

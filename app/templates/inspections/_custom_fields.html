@@ -1,0 +1,159 @@
+{# app/templates/inspections/_custom_fields.html
+   "Manage Custom Fields" button + modal for a form section.
+   Include INSIDE the <form> (right after the section's <h4> / grid):
+       {% set cf_section_label = 'Section 3' %}
+       {% include "inspections/_custom_fields.html" %}
+   Saved as a list of {name, value} in report.data["custom_fields"], posted
+   through the hidden input name="custom_fields" (JSON). No DB migration. #}
+{% set cf_section_label = cf_section_label|default('Section 3') %}
+
+<input type="hidden" name="custom_fields" id="cfHidden" value="">
+
+<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:-6px 0 20px 0;">
+  <button type="button" class="btn btn-outline" id="cfOpenBtn" onclick="cfOpen()"
+          style="text-transform:uppercase; letter-spacing:.4px; font-size:12px;">
+    <span style="font-size:16px; line-height:1;">+</span> Manage Custom Fields <span id="cfCount"></span>
+  </button>
+</div>
+
+<div id="cfModal" style="display:none; position:fixed; inset:0; z-index:2100; background:rgba(15,23,42,.45); align-items:center; justify-content:center;">
+  <div style="background:#fff; width:min(620px,94vw); max-height:88vh; border-radius:10px; display:flex; flex-direction:column; box-shadow:0 12px 44px rgba(0,0,0,.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb;">
+      <strong style="letter-spacing:.5px; text-transform:uppercase; display:flex; align-items:center; gap:10px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1657C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Manage Custom Fields ({{ cf_section_label }})
+      </strong>
+      <button type="button" onclick="cfClose()" aria-label="Close"
+              style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#94a3b8;">&times;</button>
+    </div>
+
+    <div id="cfBody" style="padding:18px 20px; overflow:auto; flex:1; min-height:120px;"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 20px; border-top:1px solid #e5e7eb; background:#fafbfc; border-radius:0 0 10px 10px;">
+      <button type="button" class="btn btn-outline" onclick="cfAddRow()" style="text-transform:uppercase; letter-spacing:.4px; font-size:12px;">
+        <span style="font-size:16px; line-height:1;">+</span> Add Field
+      </button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-outline" onclick="cfClose()" style="text-transform:uppercase; letter-spacing:.4px; font-size:12px;">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="cfSave()" style="text-transform:uppercase; letter-spacing:.4px; font-size:12px;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var MAX_FIELDS = 20;
+  var saved = {{ (data.custom_fields if data and data.custom_fields else [])|tojson }};  // committed list
+  var working = [];                                                                        // edited in the modal
+
+  function el(tag, css, attrs) {
+    var e = document.createElement(tag);
+    if (css) e.style.cssText = css;
+    Object.keys(attrs || {}).forEach(function (k) { e[k] = attrs[k]; });
+    return e;
+  }
+
+  function clean(list) {
+    return (Array.isArray(list) ? list : []).map(function (f) {
+      return { name: String((f && f.name) || '').trim(), value: String((f && f.value) || '').trim() };
+    }).filter(function (f) { return f.name || f.value; });
+  }
+
+  // ---- main-form side: hidden input, button counter, preview chips
+  function refreshForm() {
+    document.getElementById('cfHidden').value = JSON.stringify(saved);
+    document.getElementById('cfCount').textContent = saved.length ? '(' + saved.length + ')' : '';
+    renderGridFields();
+  }
+
+  // Custom fields appear in the same grid as the other Section 3 fields,
+  // as ordinary "label + text box" pairs. The label is the Field Name (change
+  // it in the modal); the box is editable in place and saved with the form.
+  function renderGridFields() {
+    var grid = document.getElementById('cfGrid');
+    if (!grid) return;
+    Array.prototype.slice.call(grid.querySelectorAll('[data-cf]')).forEach(function (n) { n.remove(); });
+    saved.forEach(function (f, i) {
+      var cell = el('div');
+      cell.setAttribute('data-cf', '1');
+      cell.appendChild(el('label', 'display:block; margin-bottom:3px;', { textContent: f.name || 'Custom Field' }));
+      var inp = el('input', '', { type: 'text', value: f.value, maxLength: 200 });
+      inp.addEventListener('input', function () {
+        saved[i].value = inp.value;
+        document.getElementById('cfHidden').value = JSON.stringify(saved);
+      });
+      cell.appendChild(inp);
+      grid.appendChild(cell);
+    });
+  }
+
+  // ---- modal rendering
+  function render() {
+    var body = document.getElementById('cfBody');
+    body.innerHTML = '';
+    if (!working.length) {
+      body.appendChild(el('div', 'text-align:center; color:#94a3b8; font-style:italic; font-size:13px; padding:28px 0;',
+        { textContent: 'No custom fields added yet. Click "+ Add Field" below.' }));
+      return;
+    }
+    var lbl = 'display:block; font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#64748B; margin-bottom:5px;';
+    var inp = 'width:100%; box-sizing:border-box; padding:10px 12px;';
+    var wrap = el('div', 'background:#f8fafc; border:1px solid #eef1f5; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:12px;');
+    working.forEach(function (f, i) {
+      var row = el('div', 'display:flex; gap:14px; align-items:flex-end;');
+
+      var c1 = el('div', 'flex:1; min-width:0;');
+      c1.appendChild(el('label', lbl, { textContent: 'Field Name' }));
+      var n = el('input', inp, { type: 'text', placeholder: 'e.g. Rope / Lift', value: f.name, maxLength: 100 });
+      n.addEventListener('input', function () { working[i].name = n.value; });
+      c1.appendChild(n);
+
+      var c2 = el('div', 'flex:1; min-width:0;');
+      c2.appendChild(el('label', lbl, { textContent: 'Field Value' }));
+      var v = el('input', inp, { type: 'text', placeholder: 'e.g. 10 mm / 6 mtr', value: f.value, maxLength: 200 });
+      v.addEventListener('input', function () { working[i].value = v.value; });
+      c2.appendChild(v);
+
+      var del = el('button', 'background:none; border:none; cursor:pointer; padding:9px 4px; color:#E11D48;',
+        { type: 'button', title: 'Remove field' });
+      del.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+      del.addEventListener('click', function () { working.splice(i, 1); render(); });
+
+      row.appendChild(c1); row.appendChild(c2); row.appendChild(del);
+      wrap.appendChild(row);
+    });
+    body.appendChild(wrap);
+  }
+
+  window.cfOpen = function () {
+    working = saved.map(function (f) { return { name: f.name, value: f.value }; });
+    render();
+    document.getElementById('cfModal').style.display = 'flex';
+  };
+  window.cfClose = function () { document.getElementById('cfModal').style.display = 'none'; };
+  window.cfAddRow = function () {
+    if (working.length >= MAX_FIELDS) { alert('Maximum ' + MAX_FIELDS + ' custom fields.'); return; }
+    working.push({ name: '', value: '' });
+    render();
+    var inputs = document.querySelectorAll('#cfBody input[type=text]');
+    if (inputs.length >= 2) inputs[inputs.length - 2].focus();
+  };
+  window.cfSave = function () {
+    saved = clean(working);
+    refreshForm();
+    cfClose();
+  };
+  // Used by "Copy Previous Form Data" to bring over the old report's fields.
+  window.cfSetFields = function (list) { saved = clean(list); refreshForm(); };
+
+  // Enter inside the modal must not submit the main form.
+  document.getElementById('cfModal').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') e.preventDefault();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cfClose(); });
+
+  saved = clean(saved);
+  refreshForm();
+})();
+</script>

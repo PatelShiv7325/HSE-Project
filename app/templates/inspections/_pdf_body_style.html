@@ -17,7 +17,7 @@
     font-size: 10.5px;
     color: #1a1a1a;
     margin: 0;
-    padding: 3mm 6mm 4mm 6mm;
+    padding: 0 6mm 0 6mm;
     /* 297mm page height minus the 34mm top margin and 20mm bottom margin
        reserved for the header/footer in pdf_worker.py -- forces the body
        to always fill the full printable area so its side border reaches
@@ -36,8 +36,11 @@
   .label-col { font-weight: 600; }
   .header-bar-row td { background: #f0f2f5; font-weight: 700; text-align: center; }
   .cert-para { font-size: 10px; margin: 10px 0; text-align: justify; }
-  .due-sign-table td { border: 1px solid #999; padding: 10px; vertical-align: middle; }
-  .due-date { color: #C0272D; font-weight: 700; text-align: center; }
-  .sign-name { font-weight: 700; text-align: center; }
-  .sign-title { font-size: 8.5px; text-align: center; color: #444; }
+  /* Header box: Test Report No. | FORM NO. | Date -- bold, centred, roomy */
+  .hdr-main td { font-weight: 700; font-size: 11.5px; line-height: 1.35; padding: 8px 6px; vertical-align: middle; text-align: center; background: #fff; }
+  /* Next-exam-due / signature box: tall enough (40mm) for the stamp + signature */
+  .due-sign-table td { border: 1px solid #999; padding: 10px; vertical-align: middle; height: 40mm; }
+  .due-date { color: #C0272D; font-weight: 700; text-align: center; font-size: 12px; }
+  .sign-name { font-weight: 700; text-align: center; font-size: 11px; margin-top: 14mm; }
+  .sign-title { font-size: 9px; text-align: center; color: #222; margin-top: 1mm; }
 </style>

@@ -68,7 +68,7 @@
     </div>
 
     <h4>Hoist / Lift Details</h4>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+    <div id="cfGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
       <div>
         <label style="display:block; margin-bottom:3px;">Description</label>
         <input type="text" name="hoist_description" value="{{ data.hoist_description or '' }}">
@@ -98,6 +98,8 @@
         <input type="text" name="max_safe_load" value="{{ data.max_safe_load or '' }}">
       </div>
     </div>
+    {% set cf_section_label = 'Section 3' %}
+    {% include "inspections/_custom_fields.html" %}
 
     <h4>Examination Findings</h4>
     <p class="text-muted" style="margin-top:-8px; font-size:12.5px;">Leave a field on "Satisfactory" if no defect was found.</p>
@@ -229,37 +231,54 @@
     });
   }
 
-  // ---- Auto-fill Next Exam Due (+6 months) and Reminder Date (+5 months)
-  // from the Certification Date. Both stay editable; they are re-calculated
-  // whenever the Certification Date changes, and also filled on first load
-  // when they are still empty (new report).
+  // ---- Auto-fill from the Certification Date:
+  //   Next Examination Due = Certification Date + 6 months - 1 day
+  //   Reminder Date        = Next Examination Due - 1 month
+  //   e.g. 01/01/2026  ->  Next Exam 30/06/2026, Reminder 30/05/2026
+  // Both stay editable. Recalculated whenever a COMPLETE, valid Certification
+  // Date is entered/picked; half-typed dates (year "0202" while typing 2028)
+  // are ignored.
   function addMonthsISO(iso, months) {
-    if (!iso) return '';
-    var p = iso.split('-');
-    var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
-    if (isNaN(y) || isNaN(m) || isNaN(d)) return '';
-    var total = m + months;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return '';
+    var y = +m[1], mo = +m[2] - 1, d = +m[3];
+    if (y < 1900 || y > 2100) return '';
+    var total = mo + months;
     var ny = y + Math.floor(total / 12);
     var nm = ((total % 12) + 12) % 12;
-    var lastDay = new Date(ny, nm + 1, 0).getDate();   // clamp 31 Aug -> 28/29 Feb etc.
-    var nd = Math.min(d, lastDay);
-    return ny + '-' + String(nm + 1).padStart(2, '0') + '-' + String(nd).padStart(2, '0');
+    var lastDay = new Date(ny, nm + 1, 0).getDate();   // clamp 31 -> 28/29/30
+    return ny + '-' + String(nm + 1).padStart(2, '0') + '-' + String(Math.min(d, lastDay)).padStart(2, '0');
+  }
+
+  function addDaysISO(iso, days) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return '';
+    var dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + days));
+    return dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0') + '-' + String(dt.getUTCDate()).padStart(2, '0');
   }
 
   function autoFillExamDates(force) {
     var cert = document.querySelector('input[name="certification_date"]');
     var next = document.querySelector('input[name="next_exam_date"]');
     var rem  = document.querySelector('input[name="reminder_date"]');
-    if (!cert || !next || !rem || !cert.value) return;
-    if (force || !next.value) next.value = addMonthsISO(cert.value, 6);
-    if (force || !rem.value)  rem.value  = addMonthsISO(cert.value, 5);
+    if (!cert || !next || !rem) return;
+    var sixMonths = addMonthsISO(cert.value, 6);
+    if (!sixMonths) return;                            // incomplete / invalid date
+    var nextVal = addDaysISO(sixMonths, -1);           // one day before
+    var remVal  = addMonthsISO(nextVal, -1);           // one month before due date
+    if (!nextVal || !remVal) return;
+    if (force || !next.value) next.value = nextVal;
+    if (force || !rem.value)  rem.value  = remVal;
+    next.dispatchEvent(new Event('change', { bubbles: true }));
+    rem.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     var cert = document.querySelector('input[name="certification_date"]');
     if (!cert) return;
-    cert.addEventListener('change', function () { autoFillExamDates(true); });
-    cert.addEventListener('input',  function () { autoFillExamDates(true); });
+    ['change', 'input', 'blur'].forEach(function (ev) {
+      cert.addEventListener(ev, function () { autoFillExamDates(true); });
+    });
     autoFillExamDates(false);
   });
 </script>

@@ -1,7 +1,7 @@
-<table class="header-bar-row">
+<table class="header-bar-row hdr-main">
   <tr>
-    <td style="width:33%; text-align:left; font-weight:400;">Test Report No.<br><strong>{{ report.report_no }}</strong></td>
-    <td style="width:34%;">
+    <td style="width:29%; text-align:center;">Test Report No.<br><strong>{{ report.report_no }}</strong></td>
+    <td style="width:47%;">
       {% if form_type == 'form10' %}
         FORM NO. 10<br>(Prescribed under Rule 60)<br>Report of examination of lifting machines, ropes and lifting tackles particulars.
       {% elif form_type == 'form11' %}
@@ -10,23 +10,23 @@
         {{ config.label }}<br>{{ config.rule }}
       {% endif %}
     </td>
-    <td style="width:33%; text-align:right; font-weight:400;">Date:<br><strong>{{ report.report_date.strftime('%d-%m-%Y') if report.report_date else '' }}</strong></td>
+    <td style="width:24%; text-align:center;">Date:<br><strong>{{ report.report_date|dmy('') }}</strong></td>
   </tr>
 </table>
 
 {% if form_type == 'form10' %}
   <table>
     <tr>
-      <td style="width:40%;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
-      <td style="width:30%;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
-      <td style="width:30%;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
+      <td style="width:34%; text-align:center;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
+      <td style="width:33%; text-align:center;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
+      <td style="width:33%; text-align:center;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
     </tr>
   </table>
   <table><tr><td class="header-bar-row" style="text-align:center; font-weight:700;">(As given in the license)</td></tr></table>
 
   <table>
     <tr><td class="no-col">1.</td><td class="label-col" style="width:32%;">Name of occupier of factory</td><td><strong>{{ data.occupier_name or '' }}</strong></td></tr>
-    <tr><td class="no-col">2.</td><td class="label-col">Address of factory</td><td>{{ (data.address or '')|replace('\n', '<br>')|safe }}</td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">Address of factory</td><td>{{ data.address|address_block(report.company.name if report.company else '') }}</td></tr>
     <tr>
       <td class="no-col">3.</td>
       <td class="label-col">Distinguishing number or mark (if any) and description sufficient to identify the lifting machine, chain, rope or lifting tackle</td>
@@ -38,11 +38,11 @@
         {% if data.location %}Location: {{ data.location }}{% endif %}
       </td>
     </tr>
-    <tr><td class="no-col">4.</td><td class="label-col">Date when the lifting machine, chain, rope or lifting tackle was first used in the factory.</td><td>{{ data.first_use_date or '' }}</td></tr>
+    <tr><td class="no-col">4.</td><td class="label-col">Date when the lifting machine, chain, rope or lifting tackle was first used in the factory.</td><td>{{ data.first_use_date|dmy }}</td></tr>
     <tr>
       <td class="no-col">5.</td>
       <td class="label-col">Date of each examination made under section 29(1)(a)(iii) and by whom it was carried out.</td>
-      <td>{{ data.examination_date or data.last_exam_date or '' }}{% if data.examined_by %} by {{ data.examined_by }}{% endif %}</td>
+      <td>{{ data.examination_date|dmy or data.last_exam_date|dmy }}{% if data.examined_by %} by {{ data.examined_by }}{% endif %}</td>
     </tr>
     <tr>
       <td class="no-col">6.</td>
@@ -62,13 +62,13 @@
   </table>
 
   <p class="cert-para">
-    I certify that on <strong>{{ data.certification_date or '' }}</strong> the lifting machine, chain, rope or lifting tackle described above was thoroughly examined and that the above is a true report of the result of the examination.
+    I certify that on <strong>{{ data.certification_date|dmy }}</strong> the lifting machine, chain, rope or lifting tackle described above was thoroughly examined and that the above is a true report of the result of the examination.
   </p>
 
   <table class="due-sign-table">
     <tr>
-      <td style="width:55%;"><div class="due-date">NEXT EXAMINATION DUE : {{ data.next_exam_date or '' }}</div></td>
-      <td style="width:45%;">
+      <td style="width:50%;"><div class="due-date">NEXT EXAMINATION DUE : {{ data.next_exam_date|dmy }}</div></td>
+      <td style="width:50%;">
         <div class="sign-name">{{ data.competent_person_name or '' }}</div>
         <div class="sign-title">
           {{ data.competent_person_title or 'Competent Person Declared by Director' }} / {{ data.competent_person_state or 'Gujarat' }} State,<br>
@@ -81,16 +81,16 @@
 {% elif form_type == 'form11' %}
   <table>
     <tr>
-      <td style="width:40%;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
-      <td style="width:30%;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
-      <td style="width:30%;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
+      <td style="width:34%; text-align:center;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
+      <td style="width:33%; text-align:center;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
+      <td style="width:33%; text-align:center;"><strong>NIC Code No.:</strong> {{ data.nic_code or 'NA' }}</td>
     </tr>
   </table>
   <table><tr><td class="header-bar-row" style="text-align:center; font-weight:700;">(As given in the license)</td></tr></table>
 
   <table>
     <tr><td class="no-col">1.</td><td class="label-col" style="width:32%;">Occupier (or owner) of Premises</td><td><strong>{{ data.occupier_name or '' }}</strong></td></tr>
-    <tr><td class="no-col">2.</td><td class="label-col">Address</td><td>{{ (data.address or '')|replace('\n', '<br>')|safe }}</td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">Address</td><td>{{ data.address|address_block(report.company.name if report.company else '') }}</td></tr>
     <tr>
       <td class="no-col">3.</td>
       <td class="label-col">Name, description and distinctive number of pressure vessel or plant</td>
@@ -113,7 +113,7 @@
     </tr>
 
     <tr><td class="no-col">6.</td><td colspan="2" class="label-col">Particulars of pressure vessel or plant</td></tr>
-    <tr><td class="no-col">a)</td><td class="label-col">Date of Construction</td><td>{{ data.date_of_construction or '' }}</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Date of Construction</td><td>{{ data.date_of_construction|dmy }}</td></tr>
     <tr><td class="no-col">b)</td><td class="label-col">Thickness of Walls</td>
       <td>Shell: {{ data.thickness_shell or '' }}
         {% if data.thickness_jacket %} &nbsp;|&nbsp; Jacket: {{ data.thickness_jacket }}{% endif %}
@@ -121,13 +121,13 @@
         {% if data.thickness_pipeline %} &nbsp;|&nbsp; Pipeline: {{ data.thickness_pipeline }}{% endif %}
       </td>
     </tr>
-    <tr><td class="no-col">c)</td><td class="label-col">Date on which it was first taken in to use</td><td>{{ data.first_use_date or '' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Date on which it was first taken in to use</td><td>{{ data.first_use_date|dmy }}</td></tr>
     <tr><td class="no-col">d)</td><td class="label-col">Safe working Pressure</td><td>{{ data.safe_working_pressure or '' }}</td></tr>
 
     <tr><td class="no-col">7.</td><td colspan="2" class="label-col">Date of</td></tr>
-    <tr><td class="no-col">a)</td><td class="label-col">Last external examination</td><td>{{ data.last_external_exam or '' }}</td></tr>
-    <tr><td class="no-col">b)</td><td class="label-col">Last internal examination</td><td>{{ data.last_internal_exam or 'Not Applicable' }}</td></tr>
-    <tr><td class="no-col">c)</td><td class="label-col">Last hydraulic examination</td><td>{{ data.last_hydraulic_exam or '' }}</td></tr>
+    <tr><td class="no-col">a)</td><td class="label-col">Last external examination</td><td>{{ data.last_external_exam|dmy }}</td></tr>
+    <tr><td class="no-col">b)</td><td class="label-col">Last internal examination</td><td>{{ data.last_internal_exam|dmy or 'Not Applicable' }}</td></tr>
+    <tr><td class="no-col">c)</td><td class="label-col">Last hydraulic examination</td><td>{{ data.last_hydraulic_exam|dmy }}</td></tr>
     <tr><td class="no-col">d)</td><td class="label-col">Last ultrasonic or other non-destructive test</td><td>{{ data.last_ultrasonic_test or '' }}</td></tr>
 
     <tr><td class="no-col">8.</td><td class="label-col">Whether lagging was removed for purposes of examination</td><td>{{ data.lagging_removed or 'Not Applicable' }}</td></tr>
@@ -178,16 +178,16 @@
   </table>
 
   <p class="cert-para">
-    {{ (data.certification_text or '').replace('{date}', data.certification_date or '') }}
+    {{ (data.certification_text or '').replace('{date}', data.certification_date|dmy) }}
   </p>
 
   <table class="due-sign-table">
     <tr>
-      <td style="width:55%;">
-        <div class="due-date">NEXT NDT & EXTERNAL TEST DUE : {{ data.next_ndt_date or '' }}</div>
-        <div class="due-date" style="margin-top:10px;">NEXT HYDROTEST DUE : {{ data.next_hydro_date or '' }}</div>
+      <td style="width:50%;">
+        <div class="due-date">NEXT NDT & EXTERNAL TEST DUE : {{ data.next_ndt_date|dmy }}</div>
+        <div class="due-date" style="margin-top:10px;">NEXT HYDROTEST DUE : {{ data.next_hydro_date|dmy }}</div>
       </td>
-      <td style="width:45%;">
+      <td style="width:50%;">
         <div class="sign-name">{{ data.competent_person_name or '' }}</div>
         <div class="sign-title">
           {{ data.competent_person_title or 'Competent Person Declared by Director' }},<br>
@@ -216,7 +216,7 @@
     {% if section_name == 'Certification' %}
     <div style="margin-top:22px;">
       <div style="font-weight:700; font-size:12.5px; margin:14px 0 6px; border-bottom:1.5px solid #333; padding-bottom:3px;">Certification</div>
-      <p>{{ (data.certification_text or '').replace('{date}', data.certification_date or '') }}</p>
+      <p>{{ (data.certification_text or '').replace('{date}', data.certification_date|dmy) }}</p>
       <table>
         {% for key, label, input_type, default in section_fields %}
           {% if key != 'certification_text' %}

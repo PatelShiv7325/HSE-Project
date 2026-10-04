@@ -65,7 +65,7 @@
           <td>{{ x.report.report_no }}</td>
           <td><span class="text-muted" style="font-size:12.5px;">{{ x.form_label }}</span></td>
           <td>
-            {{ x.due_date.strftime('%d-%m-%Y') if x.due_date else 'N/A' }}
+            {{ x.due_date|dmy('N/A') }}
             <div style="font-size:11px; font-weight:700; margin-top:2px;
               {% if x.status == 'critical' %}color:var(--danger);
               {% elif x.status == 'expired' %}color:var(--danger);

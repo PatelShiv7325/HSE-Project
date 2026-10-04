@@ -60,7 +60,7 @@
           <tr>
             <td><input type="checkbox" class="row-check" name="report_ids" value="{{ r.id }}"></td>
             <td>{{ r.report_no }}</td>
-            <td>{{ r.report_date.strftime('%d-%m-%Y') if r.report_date else '-' }}</td>
+            <td>{{ r.report_date|dmy('-') }}</td>
             <td style="display:flex; gap:6px;">
               {% if endpoints %}
                 <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for(endpoints.edit, report_id=r.id, form_type=ftype) }}">Edit</a>

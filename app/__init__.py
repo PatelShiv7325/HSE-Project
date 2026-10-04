@@ -16,6 +16,59 @@ def create_app():
     login_manager.init_app(app)
     csrf.init_app(app)
 
+    # dd/mm/yyyy everywhere: {{ value|dmy }} or {{ value|dmy('-') }} (custom
+    # text when empty). Accepts date/datetime objects and ISO / dd-mm-yyyy
+    # strings; anything that isn't a recognisable date (e.g. "Not Applicable")
+    # is returned unchanged.
+    @app.template_filter("dmy")
+    def dmy_filter(value, default=""):
+        from datetime import date as _date, datetime as _dt
+        if value is None or value == "":
+            return default
+        if isinstance(value, _dt):
+            return value.strftime("%d/%m/%Y")
+        if isinstance(value, _date):
+            return value.strftime("%d/%m/%Y")
+        text = str(value).strip()
+        for candidate in (text, text[:10]):
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y"):
+                try:
+                    return _dt.strptime(candidate, fmt).strftime("%d/%m/%Y")
+                except ValueError:
+                    pass
+        return text
+
+    # Address cell on the PDFs: company name (bold) on line 1, address (normal) on line 2.
+    #   {{ data.address|address_block(report.company.name if report.company else '') }}
+    @app.template_filter("address_block")
+    def address_block_filter(address, company_name=""):
+        import re
+        from markupsafe import Markup, escape
+        text = re.sub(r"\*+", "", str(address or "")).strip()
+        company = re.sub(r"\*+", "", str(company_name or "")).strip()
+        if not text:
+            return ""
+        name, rest = "", text
+        if "\n" in text:                                    # already typed on 2 lines
+            name, rest = [p.strip() for p in text.split("\n", 1)]
+        elif company and text.upper().startswith(company.upper()):
+            name, rest = company, text[len(company):].lstrip(" ,-")
+        else:
+            m = re.match(r"^(M/S\.?\s+.+?)[\s,]+((?:PLOT|SURVEY|BLOCK|UNIT|SHED|S\.?\s?NO|R\.?S\.?\s?NO)\b.*)$",
+                         text, re.I | re.S)
+            if m:
+                name, rest = m.group(1).strip(), m.group(2).strip()
+            elif company:
+                name, rest = company, text
+        rest = re.sub(r"\s*\n\s*", ", ", rest).strip()
+        # company name bold, address line normal weight
+        out = []
+        if name:
+            out.append("<strong>%s</strong>" % escape(name))
+        if rest:
+            out.append(str(escape(rest)))
+        return Markup("<br>".join(out))
+
     login_manager.login_view = "auth.login"
     login_manager.login_message_category = "info"
 

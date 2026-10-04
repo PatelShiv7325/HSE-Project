@@ -74,3 +74,41 @@
   </form>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+  // Company ID = first letter of every word of the company name
+  // (Reliance Industries Ltd -> RIL; M/S Mistry Engineering Works -> MEW).
+  // "M/S", "Mr." and "Messrs" prefixes are ignored. It keeps auto-filling
+  // while you type the name, until you type your own Company ID; clear the
+  // Company ID box to switch auto-fill back on.
+  (function () {
+    var nameEl = document.querySelector('input[name="name"]');
+    var codeEl = document.querySelector('input[name="company_code"]');
+    if (!nameEl || !codeEl) return;
+
+    function makeCode(name) {
+      var t = (name || '').replace(/\b(m\/s|messrs|mr|mrs|ms)\b\.?/gi, ' ');
+      return t.split(/[^A-Za-z0-9]+/).filter(Boolean)
+              .map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+    }
+
+    var manual = codeEl.value.trim() !== '';     // existing code = keep as is
+    var lastAuto = makeCode(nameEl.value);
+
+    nameEl.addEventListener('input', function () {
+      if (manual) return;
+      lastAuto = makeCode(nameEl.value);
+      codeEl.value = lastAuto;
+    });
+    codeEl.addEventListener('input', function () {
+      manual = codeEl.value.trim() !== '' && codeEl.value !== lastAuto;
+      if (codeEl.value.trim() === '') {          // cleared -> auto again
+        manual = false;
+        lastAuto = makeCode(nameEl.value);
+        codeEl.value = lastAuto;
+      }
+    });
+  })();
+</script>
+{% endblock %}

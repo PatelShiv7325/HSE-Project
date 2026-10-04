@@ -2,38 +2,56 @@
    Inline styles only -- external stylesheets don't apply inside
    Playwright's header/footer frame. Uses a 5mm left/right page margin so
    its border lines up with _pdf_footer.html and the `body` border in
-   _pdf_body_style.html. #}
+   _pdf_body_style.html.
+
+   Vertical geometry (keep these three in sync):
+     Chromium draws this template 5.3mm below the page top, so the box starts
+     at 5.3mm. Its fixed height (28.7mm) makes it end at 34mm, which is
+     MARGIN_TOP_MM in pdf_worker.py -- exactly where the body's side border
+     begins, so the frame lines flow header -> body with no gap or overlap.
+     The dashed line is pinned to the bottom of the box (3mm above the body
+     table) and inset 2mm so it is exactly as wide as the tables below.
+
+   Layout: [logo] | blue divider | Name / red tagline / address / contacts.
+   Tagline, address, phone, email and website come from the My Company
+   settings page; if any is left blank here the defaults below are used so
+   the letterhead always prints in full. #}
+{% set tagline = (profile.tagline if profile and profile.tagline else 'Fire, Safety, Environment, and Engineering Consultant') %}
+{% set address = (profile.address if profile and profile.address else '3-4 Narayan Angan, Opp. Narayan City Scape, Waghodia Dabhoi Ring Road, Vadodara - 390025.') %}
+{% set phone   = (profile.phone   if profile and profile.phone   else '+91 97258 03325') %}
+{% set email   = (profile.email   if profile and profile.email   else 'globalhseassociates@gmail.com') %}
+{% set website = (profile.website if profile and profile.website else 'www.globalhseassociates.co.in') %}
+{% if font_data_uri %}
+<style>
+  @font-face {
+    font-family: 'BankGothicHdr';
+    src: url('{{ font_data_uri }}') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+</style>
+{% endif %}
 <div style="width:100%; font-family:Arial,Helvetica,sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
-  <div style="margin:5mm 5mm 0 5mm; border:1px solid #000; border-bottom:none; padding:3mm 4mm 2.5mm 4mm; box-sizing:border-box;">
+  <div style="margin:0 5mm 0 5mm; height:29.2mm; overflow:hidden; display:flex; flex-direction:column; border:1px solid #000; border-bottom:none; padding:2mm 4mm 0 4mm; box-sizing:border-box;">
     <table style="width:100%; border-collapse:collapse;">
       <tr>
-        <td style="width:42mm; vertical-align:middle; padding-right:3mm; border-right:1px solid #999;">
+        <td style="width:46mm; vertical-align:middle; padding-right:3mm; border-right:1.5px solid #1D3E71;">
           {% if logo_data_uri %}
-          <img src="{{ logo_data_uri }}" style="max-width:38mm; max-height:22mm; display:block;">
+          <img src="{{ logo_data_uri }}" style="max-width:42mm; max-height:21mm; display:block; margin:0 auto;">
           {% endif %}
         </td>
         <td style="vertical-align:middle; padding-left:4mm;">
-          <div style="font-size:21px; font-weight:700; letter-spacing:3px; color:#1D3E71; text-transform:uppercase; line-height:1.15;">
-            {{ profile.legal_name if profile and profile.legal_name else 'Company Name' }}
+          <div style="font-family:'BankGothicHdr','Bank Gothic',Arial,Helvetica,sans-serif; font-size:28px; font-weight:400; letter-spacing:0.6px; color:#1D3E71; -webkit-text-stroke:0.6px #1D3E71; text-transform:uppercase; line-height:1.1; white-space:nowrap;">
+            {{ profile.legal_name if profile and profile.legal_name else 'Global HSE Associates' }}
           </div>
-          {% if profile and profile.tagline %}
-          <div style="font-size:11.5px; font-weight:700; color:#D94042; text-transform:uppercase; margin-top:1mm;">{{ profile.tagline }}</div>
-          {% endif %}
-          {% if profile and profile.address %}
-          <div style="font-size:9.5px; color:#1D3E71; margin-top:1.5mm;">{{ profile.address }}</div>
-          {% endif %}
-          {% if profile and (profile.phone or profile.email or profile.website) %}
-          <div style="font-size:10px; font-weight:700; color:#1D3E71; margin-top:0.5mm;">
-            {%- set parts = [] -%}
-            {%- if profile.phone %}{% set _ = parts.append(profile.phone) %}{% endif -%}
-            {%- if profile.email %}{% set _ = parts.append(profile.email) %}{% endif -%}
-            {%- if profile.website %}{% set _ = parts.append(profile.website) %}{% endif -%}
-            {{ parts|join('  \u2022  ') }}
+          <div style="font-size:11.5px; font-weight:700; color:#D94042; text-transform:uppercase; margin-top:1.2mm; white-space:nowrap;">{{ tagline }}</div>
+          <div style="font-size:9px; color:#1D3E71; text-transform:uppercase; margin-top:1.2mm;">{{ address }}</div>
+          <div style="font-size:10px; font-weight:700; color:#1D3E71; margin-top:0.8mm;">
+            {{ [phone, email, website]|select|join('  \u2022  ') }}
           </div>
-          {% endif %}
         </td>
       </tr>
     </table>
-    <div style="border-bottom:2px dashed #1D3E71; margin-top:2.5mm;"></div>
+    <div style="border-bottom:2px dashed #1D3E71; margin:auto 2mm 3mm 2mm;"></div>
   </div>
 </div>

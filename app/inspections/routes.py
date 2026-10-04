@@ -107,6 +107,27 @@ def _logo_data_uri(profile=None):
     return _logo_data_uri._default_cached
 
 
+def _header_font_data_uri():
+    """Bank Gothic font (static/fonts/BankGothic.ttf) as a base64 data: URI,
+    so the PDF header can use it via @font-face. Playwright's header frame
+    can't load files or /static URLs, so the font bytes are embedded
+    directly -- same technique as _logo_data_uri().
+    """
+    import base64
+    import os
+
+    if not hasattr(_header_font_data_uri, "_cached"):
+        app_dir = os.path.dirname(os.path.dirname(__file__))
+        font_path = os.path.join(app_dir, "static", "fonts", "BankGothic.ttf")
+        if os.path.isfile(font_path):
+            with open(font_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+            _header_font_data_uri._cached = f"data:font/ttf;base64,{encoded}"
+        else:
+            _header_font_data_uri._cached = ""  # falls back to Arial in template
+    return _header_font_data_uri._cached
+
+
 def _pdf_header_footer_html(profile):
     """Renders the letterhead header and footer as self-contained HTML
     fragments for Playwright's native header_template/footer_template PDF
@@ -122,6 +143,7 @@ def _pdf_header_footer_html(profile):
     """
     header_html = render_template(
         "inspections/_pdf_header.html", profile=profile, logo_data_uri=_logo_data_uri(profile),
+        font_data_uri=_header_font_data_uri(),
     )
     footer_html = render_template("inspections/_pdf_footer.html", profile=profile)
     return header_html, footer_html
@@ -173,6 +195,28 @@ FORM9_FINDING_FIELDS = [
 ]
 
 
+def _parse_custom_fields(raw):
+    """Parses the JSON list posted by the "Manage Custom Fields" modal into a
+    clean list of {"name", "value"} dicts (stored in report.data["custom_fields"]
+    and printed inside item 3 of the Form 9 PDF). Bad/empty input -> []."""
+    import json
+    try:
+        items = json.loads(raw) if raw else []
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(items, list):
+        return []
+    result = []
+    for item in items[:20]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()[:100]
+        value = str(item.get("value") or "").strip()[:200]
+        if name or value:
+            result.append({"name": name, "value": value})
+    return result
+
+
 def _parse_date(value):
     if not value:
         return None
@@ -189,7 +233,7 @@ def _add_months(d, months):
 
 def _fill_exam_dates(data):
     """Server-side safety net: if Certification Date is set but Next Exam Due /
-    Reminder Date were left blank, fill them (+6 and +5 months)."""
+    Reminder Date were left blank, fill them (+6 months -1 day, and 1 month before that)."""
     cert = data.get("certification_date")
     if not cert:
         return
@@ -197,10 +241,13 @@ def _fill_exam_dates(data):
         cert_d = _parse_date(cert)
     except (ValueError, TypeError):
         return
+    from datetime import timedelta
+    # Next Exam Due = Certification + 6 months - 1 day; Reminder = Next Exam - 1 month
+    due_d = _add_months(cert_d, 6) - timedelta(days=1)
     if not data.get("next_exam_date"):
-        data["next_exam_date"] = _add_months(cert_d, 6).isoformat()
+        data["next_exam_date"] = due_d.isoformat()
     if not data.get("reminder_date"):
-        data["reminder_date"] = _add_months(cert_d, 5).isoformat()
+        data["reminder_date"] = _add_months(due_d, -1).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +286,7 @@ def previous_reports(form_type):
         results.append({
             "id": r.id,
             "report_no": r.report_no or "",
-            "date": r.report_date.strftime("%d-%m-%Y") if r.report_date else "",
+            "date": r.report_date.strftime("%d/%m/%Y") if r.report_date else "",
             "company_id": r.company_id or "",
             "company_name": company_name or r.occupier_name or "",
             "tag_no": data.get("tag_no", ""),
@@ -321,6 +368,7 @@ def _form9_save(report):
             if not value and field in FORM9_FINDING_FIELDS:
                 value = "Satisfactory"
             data[field] = value
+        data["custom_fields"] = _parse_custom_fields(request.form.get("custom_fields"))
         _fill_exam_dates(data)
         if report is not None and (report.data or {}).get("reminder_sent_on") \
                 and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
