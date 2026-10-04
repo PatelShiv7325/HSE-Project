@@ -5,7 +5,10 @@
 <div class="card">
   <div class="toolbar">
     <h4 style="margin:0;">{{ 'Edit Form 9 Report' if report else 'New Form 9 Report (Hoist / Lift Examination)' }}</h4>
+    <div style="display:flex; gap:8px;">
+      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous Form Data</button>
     <a href="{{ url_for('inspections.form9_list') }}" class="btn btn-outline">Back to List</a>
+    </div>
   </div>
 
   <form method="post">
@@ -184,6 +187,7 @@
     <a class="btn btn-outline" href="{{ url_for('inspections.form9_list') }}">Cancel</a>
   </form>
 </div>
+{% include "inspections/_copy_previous.html" %}
 {% endblock %}
 
 {% block scripts %}

@@ -5,7 +5,10 @@
 <div class="card">
   <div class="toolbar">
     <h4 style="margin:0;">{{ 'Edit' if report else 'New' }} {{ config.label }}</h4>
+    <div style="display:flex; gap:8px;">
+      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous Form Data</button>
     <a href="{{ url_for('inspections.generic_list', form_type=form_type) }}" class="btn btn-outline">Back to List</a>
+    </div>
   </div>
 
   <form method="post">
@@ -66,6 +69,7 @@
     <a class="btn btn-outline" href="{{ url_for('inspections.generic_list', form_type=form_type) }}">Cancel</a>
   </form>
 </div>
+{% include "inspections/_copy_previous.html" %}
 {% endblock %}
 
 {% block scripts %}

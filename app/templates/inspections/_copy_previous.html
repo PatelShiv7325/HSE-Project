@@ -1,0 +1,147 @@
+{# app/templates/inspections/_copy_previous.html
+   Shared "Copy Previous Form Data" button + modal + script.
+   Include inside {% block content %} of any inspection form:
+       {% include "inspections/_copy_previous.html" %}
+   Needs `form_type` ("form9", "form10", ...) in the template context.   #}
+
+<div id="cpModal" style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,.45); align-items:center; justify-content:center;">
+  <div style="background:#fff; width:min(780px,94vw); max-height:86vh; border-radius:8px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #e5e7eb;">
+      <strong style="letter-spacing:.5px; text-transform:uppercase;">&#128203; Copy Previous Form Data</strong>
+      <button type="button" onclick="cpClose()" style="background:none; border:none; font-size:22px; cursor:pointer;">&times;</button>
+    </div>
+    <div style="padding:12px 18px; border-bottom:1px solid #e5e7eb;">
+      <input type="text" id="cpSearch" autocomplete="off" placeholder="Search by Report No, Company, Tag No, or Make..."
+             style="width:100%; padding:10px 12px;" oninput="cpDebounce()">
+    </div>
+    <div id="cpList" style="overflow:auto; flex:1; min-height:200px;"></div>
+    <div style="padding:12px 18px; border-top:1px solid #e5e7eb; text-align:right;">
+      <button type="button" class="btn btn-outline" onclick="cpClose()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var URL_BASE = "{{ url_for('inspections.previous_reports', form_type=form_type) }}";
+  var EXCLUDE_ID = {{ report.id if report else 'null' }};
+  // Never copied: unique/per-examination values. The new report keeps its
+  // own Report No., Date and exam dates (Next Exam / Reminder are
+  // re-calculated from the new Certification Date).
+  var SKIP = ['report_no', 'date', 'certification_date', 'next_exam_date', 'reminder_date',
+              'reminder_sent_on', 'next_ndt_date', 'next_hydro_date', 'examination_date',
+              'date_of_examination', 'last_exam_date', 'cal_date', 'cal_due'];
+  var timer = null;
+
+  function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+
+  window.cpOpen = function () {
+    document.getElementById('cpModal').style.display = 'flex';
+    document.getElementById('cpSearch').value = '';
+    document.getElementById('cpSearch').focus();
+    cpLoad();
+  };
+  window.cpClose = function () { document.getElementById('cpModal').style.display = 'none'; };
+  window.cpDebounce = function () { clearTimeout(timer); timer = setTimeout(cpLoad, 250); };
+
+  var CURRENT = [];
+  function cpLoad() {
+    var list = document.getElementById('cpList');
+    var q = document.getElementById('cpSearch').value.trim();
+    list.innerHTML = '<p style="text-align:center; color:#888; padding:40px;">Loading...</p>';
+    var url = URL_BASE + '?q=' + encodeURIComponent(q) + (EXCLUDE_ID ? '&exclude=' + EXCLUDE_ID : '');
+    fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        CURRENT = rows;
+        if (!rows.length) {
+          list.innerHTML = '<p style="text-align:center; color:#888; font-style:italic; padding:40px;">No matching past reports found.</p>';
+          return;
+        }
+        list.innerHTML = rows.map(function (r, i) {
+          var sub = [r.description, r.make && ('Make: ' + r.make), r.tag_no && ('Tag: ' + r.tag_no)]
+                      .filter(Boolean).join('  |  ');
+          return '<div onclick="cpApply(' + i + ')" style="padding:12px 18px; border-bottom:1px solid #f0f0f0; cursor:pointer;" ' +
+                 'onmouseover="this.style.background=\'#f3f6ff\'" onmouseout="this.style.background=\'\'">' +
+                 '<div style="display:flex; justify-content:space-between;"><strong>' + esc(r.company_name || '(no company)') + '</strong>' +
+                 '<span style="color:#666; font-size:12px;">' + esc(r.report_no) + ' &middot; ' + esc(r.date) + '</span></div>' +
+                 '<div style="color:#666; font-size:13px; margin-top:2px;">' + esc(sub) + '</div></div>';
+        }).join('');
+      })
+      .catch(function () {
+        list.innerHTML = '<p style="text-align:center; color:#c00; padding:40px;">Could not load past reports.</p>';
+      });
+  }
+
+  // Copies a past report's saved fields into the form (by input name).
+  // onlyPrefix limits it to keys starting with that prefix (used for the
+  // competent-person fallback).
+  function fillFromReport(r, onlyPrefix) {
+    var form = document.querySelector('form[method="post"]');
+    Object.keys(r.data || {}).forEach(function (key) {
+      if (SKIP.indexOf(key) !== -1) return;
+      if (onlyPrefix && key.indexOf(onlyPrefix) !== 0) return;
+      var val = r.data[key];
+      if (val == null || val === '') return;            // never blank out a field
+      var el = form.querySelector('[name="' + key + '"]');
+      if (el) el.value = val;
+    });
+  }
+
+  function recalcDates() {
+    var form = document.querySelector('form[method="post"]');
+    ['next_exam_date', 'reminder_date'].forEach(function (n) {
+      var el = form.querySelector('[name="' + n + '"]'); if (el) el.value = '';
+    });
+    if (typeof autoFillExamDates === 'function') autoFillExamDates(true);
+  }
+
+  // Clicking a row in the popup
+  window.cpApply = function (i) {
+    var r = CURRENT[i];
+    if (!r) return;
+    var cs = document.getElementById('company_search');
+    var cid = document.getElementById('company_id');
+    if (cid) cid.value = r.company_id || '';
+    if (cs) cs.value = r.company_id ? r.company_name : '';
+    fillFromReport(r);
+    recalcDates();
+    cpClose();
+  };
+
+  // Picking a company in the Company box: pull that company's most recent
+  // report of this form type and fill everything (Competent Person Name,
+  // Title, Authority, No., State, equipment details, findings ...). Only
+  // done on NEW reports so editing never overwrites saved data. If the
+  // company has no earlier report, the competent-person fields are taken
+  // from the latest report of any company instead.
+  function fetchLatest(companyId) {
+    var url = URL_BASE + '?limit=1' + (companyId ? '&company_id=' + companyId : '');
+    return fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (EXCLUDE_ID) return;                       // editing an existing report
+    var original = window.onCompanySearchInput;
+    window.onCompanySearchInput = function (input) {
+      if (typeof original === 'function') original(input);   // keeps occupier/address fill
+      var hidden = document.getElementById('company_id');
+      var companyId = hidden && hidden.value;
+      if (!companyId) return;
+      fetchLatest(companyId).then(function (rows) {
+        if (rows.length) {
+          fillFromReport(rows[0]);
+          recalcDates();
+        } else {
+          return fetchLatest(null).then(function (any) {
+            if (any.length) fillFromReport(any[0], 'competent_person_');
+          });
+        }
+      }).catch(function () {});
+    };
+  });
+
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cpClose(); });
+})();
+</script>

@@ -203,6 +203,56 @@ def _fill_exam_dates(data):
         data["reminder_date"] = _add_months(cert_d, 5).isoformat()
 
 
+# ---------------------------------------------------------------------------
+# "Copy Previous Form Data" -- JSON search used by the modal on every
+# inspection form (Form 9, 10, 11, PSV, Centrifuge). Returns recent past
+# reports of the same form type, optionally filtered by ?q= (matches
+# report no, company, occupier, tag no, make, description ... anything
+# inside the report), so the user can click one and auto-fill the form.
+# ---------------------------------------------------------------------------
+@inspections_bp.route("/previous/<any(form9, form10, form11, psv, centrifuge):form_type>")
+@login_required
+def previous_reports(form_type):
+    from flask import jsonify
+    q = (request.args.get("q") or "").strip().lower()
+    exclude_id = request.args.get("exclude", type=int)
+    company_id = request.args.get("company_id", type=int)
+    limit = max(1, min(request.args.get("limit", 30, type=int), 30))
+
+    query = InspectionReport.query.filter_by(form_type=form_type)
+    if company_id:
+        query = query.filter(InspectionReport.company_id == company_id)
+    if exclude_id:
+        query = query.filter(InspectionReport.id != exclude_id)
+    query = query.order_by(InspectionReport.report_date.desc(), InspectionReport.id.desc())
+
+    results = []
+    for r in query.limit(500).all():
+        data = r.data or {}
+        company_name = r.company.name if r.company else ""
+        haystack = " ".join(
+            [r.report_no or "", company_name, r.occupier_name or ""]
+            + [str(v) for v in data.values() if isinstance(v, (str, int, float))]
+        ).lower()
+        if q and q not in haystack:
+            continue
+        results.append({
+            "id": r.id,
+            "report_no": r.report_no or "",
+            "date": r.report_date.strftime("%d-%m-%Y") if r.report_date else "",
+            "company_id": r.company_id or "",
+            "company_name": company_name or r.occupier_name or "",
+            "tag_no": data.get("tag_no", ""),
+            "make": data.get("hoist_make") or data.get("make") or "",
+            "description": (data.get("hoist_description") or data.get("equipment_description")
+                            or data.get("vessel_description") or data.get("machine_name_description") or ""),
+            "data": data,
+        })
+        if len(results) >= limit:
+            break
+    return jsonify(results)
+
+
 @inspections_bp.route("/form9")
 @login_required
 def form9_list():
@@ -294,6 +344,7 @@ def _form9_save(report):
 
     return render_template(
         "inspections/form9_form.html",
+        form_type="form9",
         report=report,
         data=(report.data if report else {}),
         today=date.today().isoformat(),
