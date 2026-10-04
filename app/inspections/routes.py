@@ -179,6 +179,30 @@ def _parse_date(value):
     return datetime.strptime(value, "%Y-%m-%d").date()
 
 
+def _add_months(d, months):
+    """Calendar-month add, clamping the day (31 Aug + 6 months -> 28/29 Feb)."""
+    import calendar
+    total = d.month - 1 + months
+    year, month = d.year + total // 12, total % 12 + 1
+    return d.replace(year=year, month=month, day=min(d.day, calendar.monthrange(year, month)[1]))
+
+
+def _fill_exam_dates(data):
+    """Server-side safety net: if Certification Date is set but Next Exam Due /
+    Reminder Date were left blank, fill them (+6 and +5 months)."""
+    cert = data.get("certification_date")
+    if not cert:
+        return
+    try:
+        cert_d = _parse_date(cert)
+    except (ValueError, TypeError):
+        return
+    if not data.get("next_exam_date"):
+        data["next_exam_date"] = _add_months(cert_d, 6).isoformat()
+    if not data.get("reminder_date"):
+        data["reminder_date"] = _add_months(cert_d, 5).isoformat()
+
+
 @inspections_bp.route("/form9")
 @login_required
 def form9_list():
@@ -247,6 +271,10 @@ def _form9_save(report):
             if not value and field in FORM9_FINDING_FIELDS:
                 value = "Satisfactory"
             data[field] = value
+        _fill_exam_dates(data)
+        if report is not None and (report.data or {}).get("reminder_sent_on") \
+                and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
+            data["reminder_sent_on"] = report.data["reminder_sent_on"]
 
         if report is None:
             report = InspectionReport(form_type="form9", created_by_id=current_user.id)
@@ -641,6 +669,10 @@ def _generic_save(form_type, report):
             if not value and default:
                 value = default
             data[key] = value
+        _fill_exam_dates(data)
+        if report is not None and (report.data or {}).get("reminder_sent_on") \
+                and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
+            data["reminder_sent_on"] = report.data["reminder_sent_on"]
 
         # occupier_name / address are common to every form, entered once at
         # the top of the generic form template (same as Form 9), not part

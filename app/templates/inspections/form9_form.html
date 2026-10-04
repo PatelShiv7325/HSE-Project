@@ -224,5 +224,39 @@
       }
     });
   }
+
+  // ---- Auto-fill Next Exam Due (+6 months) and Reminder Date (+5 months)
+  // from the Certification Date. Both stay editable; they are re-calculated
+  // whenever the Certification Date changes, and also filled on first load
+  // when they are still empty (new report).
+  function addMonthsISO(iso, months) {
+    if (!iso) return '';
+    var p = iso.split('-');
+    var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
+    if (isNaN(y) || isNaN(m) || isNaN(d)) return '';
+    var total = m + months;
+    var ny = y + Math.floor(total / 12);
+    var nm = ((total % 12) + 12) % 12;
+    var lastDay = new Date(ny, nm + 1, 0).getDate();   // clamp 31 Aug -> 28/29 Feb etc.
+    var nd = Math.min(d, lastDay);
+    return ny + '-' + String(nm + 1).padStart(2, '0') + '-' + String(nd).padStart(2, '0');
+  }
+
+  function autoFillExamDates(force) {
+    var cert = document.querySelector('input[name="certification_date"]');
+    var next = document.querySelector('input[name="next_exam_date"]');
+    var rem  = document.querySelector('input[name="reminder_date"]');
+    if (!cert || !next || !rem || !cert.value) return;
+    if (force || !next.value) next.value = addMonthsISO(cert.value, 6);
+    if (force || !rem.value)  rem.value  = addMonthsISO(cert.value, 5);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var cert = document.querySelector('input[name="certification_date"]');
+    if (!cert) return;
+    cert.addEventListener('change', function () { autoFillExamDates(true); });
+    cert.addEventListener('input',  function () { autoFillExamDates(true); });
+    autoFillExamDates(false);
+  });
 </script>
 {% endblock %}
