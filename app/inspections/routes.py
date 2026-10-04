@@ -151,7 +151,7 @@ def _pdf_header_footer_html(profile):
 
 def _companies_json():
     """Every company as a plain dict, for the type-to-search Company box on
-    the Form 9/10/11/PSV/Centrifuge forms -- embedded once as JSON so
+    the Form 9/10/11/PSV/Centrifuge/26-A/TFH forms -- embedded once as JSON so
     filtering happens client-side per keystroke with no extra requests."""
     return [
         {
@@ -261,7 +261,8 @@ def _fill_exam_dates(data, form_type=None):
         cert_d = _parse_date(cert)
     except (ValueError, TypeError):
         return
-    due_d = _add_months(cert_d, 6) - timedelta(days=1)
+    months = (FORMS_CONFIG.get(form_type) or {}).get("exam_months", 6)
+    due_d = _add_months(cert_d, months) - timedelta(days=1)
     if not data.get("next_exam_date"):
         data["next_exam_date"] = due_d.isoformat()
     if form_type == "form11":
@@ -311,7 +312,7 @@ def _sign_stamp_uris():
 # report no, company, occupier, tag no, make, description ... anything
 # inside the report), so the user can click one and auto-fill the form.
 # ---------------------------------------------------------------------------
-@inspections_bp.route("/previous/<any(form9, form10, form11, psv, centrifuge):form_type>")
+@inspections_bp.route("/previous/<any(form9, form10, form11, psv, centrifuge, form26a, tfh):form_type>")
 @login_required
 def previous_reports(form_type):
     from flask import jsonify
@@ -807,6 +808,7 @@ FORMS_CONFIG = {
         "required": ["certification_date", "next_exam_date", "reminder_date",
                      "competent_person_name", "competent_person_no"],
         "auto_dates": True,
+        "exam_months": 12,  # Next Exam = Certification Date + 12 months - 1 day
         "options": {
             "condition_of_machine": ["Satisfactory", "Not Applicable"],
             "interlock_top_cover": ["Satisfactory", "Not Applicable"],
@@ -880,6 +882,221 @@ FORMS_CONFIG = {
             "interlock_mechanical_breaker", "earthing_provided",
         ],
     },
+    "form26a": {
+        "label": "Form 26-A - Dust/Fume Extraction System",
+        "rule": "(Prescribed under Rule 102)",
+        "custom_fields_section": "3) Description of System",
+        "required": ["certification_date", "next_exam_date", "reminder_date",
+                     "competent_person_name", "competent_person_no"],
+        "auto_dates": True,
+        "exam_months": 12,  # Next Due = Certification Date + 12 months - 1 day
+        "options": {
+            "hood_static_pressure": ["Atmospheric", "NA"],
+            "pressure_drop_joints": ["N.A.", "NA"],
+            "pressure_drop_other": ["N.A.", "NA"],
+            "velocity_outlet": ["NA"],
+            "fan_static_pressure": ["NA"],
+            "fan_pressure_drop_outlet": ["NA"],
+        },
+        "placeholders": {
+            "captured_velocities": "e.g. 5.1 m/s avg 400 x 600 mm",
+            "volume_exhausted": "e.g. 4406.48 m3/hr",
+            "transport_velocity": "e.g. 5.1 m/sec",
+            "cleaner_type": "e.g. Filter cloth - Mesh Size: 10 Micron Manual Cleaning",
+            "velocity_inlet": "e.g. 5.1 m/sec",
+            "fan_volume": "e.g. 4260 m3/hr at Fan",
+            "motor_speed_hp": "e.g. 1460 RPM - 20 HP",
+            "manufacturing_date": "e.g. 2014",
+            "first_use_date": "e.g. 2014-2015",
+        },
+        "sections": [
+            ("3) Description of System", [
+                ("system_description", "Description of System", "text",
+                 "HVAC Air Handling Unit (Fume Extraction System)"),
+                ("manufacturer_name", "Manufacturer's Name", "text", None),
+                ("location", "Location", "text", None),
+                ("serial_no", "Sr. No.", "text", None),
+                ("manufacturing_date", "Manufacturing Date", "text", None),
+                ("first_use_date", "First Use in Factory", "text", None),
+                ("system_function", "Function", "text", None),
+            ]),
+            ("4) Hood", [
+                ("hood_serial_no", "a) Serial No. of Hood", "text", None),
+                ("contaminant_captured", "b) Contaminant Captured", "text", "Dust, Fume & Hot Air"),
+                ("captured_velocities", "c) Captured Velocities", "text", None),
+                ("volume_exhausted", "d) Volume Exhausted at Hood", "text", None),
+                ("hood_static_pressure", "e) Hood Static Pressure", "text", "Atmospheric"),
+            ]),
+            ("5) Total Pressure Drops At", [
+                ("pressure_drop_joints", "a) Joints", "text", "N.A."),
+                ("pressure_drop_other", "b) Other Points of System", "text", "N.A."),
+            ]),
+            ("6) Transport Velocity in Dust/Fume", [
+                ("transport_velocity", "Transport Velocity in Dust/Fume", "text", None),
+            ]),
+            ("7) Air Cleaning Device", [
+                ("cleaner_type", "a) Type Used", "text", None),
+                ("velocity_inlet", "b) Velocity at Inlet", "text", None),
+                ("velocity_outlet", "c) Velocity at Outlet", "text", "NA"),
+                ("static_pressure_inlet", "d) Static Pressure at Inlet", "text", None),
+            ]),
+            ("8) Fan", [
+                ("fan_type", "a) Type Used", "text", "Centrifuge Blower Fan"),
+                ("fan_volume", "b) Volume Handled", "text", None),
+                ("fan_static_pressure", "c) Static Pressure", "text", "NA"),
+                ("fan_pressure_drop_outlet", "d) Pressure Drops at Outlet of Fan", "text", "NA"),
+            ]),
+            ("9) Fan Motor", [
+                ("motor_type", "a) Type", "text", None),
+                ("motor_speed_hp", "b) Speed and Horse Power", "text", None),
+            ]),
+            ("10) Defects Disclosed During Testing", [
+                ("defects_disclosed", "Particulars of defects, if any, disclosed during testing of above components", "textarea",
+                 "The Filter Should be cleaned periodically, System are Healthy."),
+            ]),
+            ("Statutory Certification", [
+                ("certification_text", "Certification Text (one paragraph per line)", "textarea",
+                 "I, certify that on this {date} the above dust/fume extraction system was thoroughly cleaned and (so far as its construction permit) made accessible for thorough examination.\n"
+                 "I, further certify that on said date, I thoroughly examined the above dust/fume extraction system including its components and fittings and all the above is true report of any examination."),
+            ]),
+            ("Next Examination Dates", [
+                ("certification_date", "Certification Date", "date", "__today__"),
+                ("next_exam_date", "Next Due Date", "date", None),
+                ("reminder_date", "Reminder Date", "date", None),
+            ]),
+            ("Certifying Authority", [
+                ("competent_person_name", "Name of Competent Person", "text", "Mr. Pritesh Joshi"),
+                ("competent_person_qualification", "Qualification", "text", "B.E. Electrical, PDIS"),
+                ("competent_person_no", "Competency Certificate No.", "text", "GUJ/DISH/CPT/A/1233/2023"),
+            ]),
+        ],
+        "finding_fields": [],
+    },
+    "tfh": {
+        "label": "Thermic Fluid Heater Test Report",
+        "rule": "[Under Section 41 of the Factories Act, 148 and Rule 68-D]",
+        "custom_fields_section": "3) Description of Unit",
+        "multi_page": True,   # long report: let it flow onto 2 pages instead of shrinking to 1
+        "units": {"op_pressure": "Kg/cm\u00b2", "op_temperature": "\u00b0C", "capacity": "Kcal/Hr"},
+        "required": ["certification_date", "next_exam_date", "reminder_date",
+                     "competent_person_name", "competent_person_no"],
+        "auto_dates": True,
+        "exam_months": 12,  # Next Test Due = Certification Date + 12 months - 1 day
+        "options": dict(
+            [(k, ["Provided", "Not Applicable"]) for k in (
+                "sd_low_level_switch", "sd_high_level_switch", "sd_temp_control",
+                "sd_diff_pressure_switch", "sd_fuel_oil_temp_control",
+                "il_burner_level", "il_burner_temp", "il_burner_dp", "il_burner_fo_temp",
+                "il_idfan_level", "il_idfan_temp", "il_idfan_dp",
+                "os_temp_gauge", "os_pressure_gauge", "os_flame_failure", "os_low_atomizing",
+                "os_low_flow", "os_high_pressure",
+                "as_low_flow", "as_high_pressure_tank", "as_high_pressure_outlet", "as_pump_trip",
+                "door_interlock", "alarm_system")]
+            + [(k, ["Within Limit", "Not Within Limit", "Not Applicable"]) for k in (
+                "tf_acidity", "tf_suspended_matter", "tf_ash_content", "tf_viscosity", "tf_flash_point")]
+            + [("control_panel_condition", ["Condition Satisfactory", "Not Applicable"]),
+               ("op_velocity", ["NA"]), ("coil_details", ["NA"])]
+        ),
+        "placeholders": {
+            "year_of_mfg": "e.g. 2019-20",
+            "op_pressure": "e.g. 7.0",
+            "op_temperature": "e.g. 280",
+            "capacity": "e.g. 20,00,000",
+            "coil_pressure_test": "e.g. Pressure test carried out at 15 Kg/cm2 Found O.K.",
+            "last_test_details": "e.g. 21-10-2024 by us.",
+        },
+        "sections": [
+            ("Report Identifiers", [
+                ("reg_no", "Reg. No.", "text", None),
+                ("license_no", "License No.", "text", None),
+            ]),
+            ("3) Description of Unit", [
+                ("unit_description", "Description of Unit", "text", "Thermic Fluid Heater"),
+                ("serial_no", "a) Sr. No. / Identification No.", "text", None),
+                ("make", "b) Make", "text", None),
+                ("year_of_mfg", "c) Year of Mfg. / First Use", "text", None),
+                ("fuel_fired", "d) Fuel Fired", "text", None),
+                ("capacity", "e) Capacity", "text", None),
+                ("coil_details", "f) Coil are removable or not and size of coils", "text", "NA"),
+            ]),
+            ("4) Operating Parameters", [
+                ("op_pressure", "a) Pressure", "text", None),
+                ("op_temperature", "b) Temperature", "text", None),
+                ("op_velocity", "c) Velocity", "text", "NA"),
+            ]),
+            ("5) Cooling of Fluid in Case of Power Failure", [
+                ("cooling_arrangement", "Suitable arrangement for cooling of fluid in case of power failure", "text",
+                 "Alternate Fluid Circulating Pump Provided"),
+            ]),
+            ("6) Safety Devices Provided for Heater", [
+                ("sd_low_level_switch", "a) Level control in expansion tank - 1. Low level switch", "text", "Provided"),
+                ("sd_high_level_switch", "a) Level control in expansion tank - 2. High level switch", "text", "Provided"),
+                ("sd_temp_control", "b) Temperature control of thermic fluid", "text", "Provided"),
+                ("sd_diff_pressure_switch", "c) Differential pressure switch on the outer line of heater tubes", "text", "Provided"),
+                ("sd_fuel_oil_temp_control", "d) Temperature control devices for the fuel oil supply to the burner (F.O. & LDO)", "text", "Provided"),
+            ]),
+            ("7a) Interlock of Burner for Safety Devices at Sr. No. 06 (F.O. / LDO & Gas)", [
+                ("il_burner_level", "1. With level control in the expansion tank", "text", "Provided"),
+                ("il_burner_temp", "2. With temperature control of thermic fluid heater", "text", "Provided"),
+                ("il_burner_dp", "3. With different pressure switch at outlet of heater tubes", "text", "Provided"),
+                ("il_burner_fo_temp", "4. Temperature control devices for fuel oil supply to burner (F.O.)", "text", "Not Applicable"),
+            ]),
+            ("7b) Interlock for ID Fan for Safety Devices at Sr. No. 06", [
+                ("il_idfan_level", "1. With level control in the expansion tank", "text", "Not Applicable"),
+                ("il_idfan_temp", "2. With temperature control of thermic fluid heater", "text", "Not Applicable"),
+                ("il_idfan_dp", "3. With different pressure switch at outlet of heater tubes", "text", "Not Applicable"),
+            ]),
+            ("8) Other Safety Devices", [
+                ("os_temp_gauge", "a) Temperature Gauge / Temperature Controller", "text", "Provided"),
+                ("os_pressure_gauge", "b) Pressure Gauge", "text", "Provided"),
+                ("os_flame_failure", "c) Flame failure system (F.O. & LDO)", "text", "Provided"),
+                ("os_low_atomizing", "d) Low atomizing medium pressure (F.O. & LDO)", "text", "Not Applicable"),
+                ("os_low_flow", "e) Low Thermic fluid flow through the system", "text", "Provided"),
+                ("os_high_pressure", "f) High Pressure at Heater outlet", "text", "Provided"),
+            ]),
+            ("9) Additional Safety Measures (F.O. & LDO)", [
+                ("as_low_flow", "a. Low thermic fluid flow through the system", "text", "Provided"),
+                ("as_high_pressure_tank", "b. High pressure in expansion tank", "text", "Provided"),
+                ("as_high_pressure_outlet", "c. High Pressure at heater outlet", "text", "Provided"),
+                ("as_pump_trip", "d. Thermic fluid pump motor tripping", "text", "Provided"),
+            ]),
+            ("10) to 13) Other Checks", [
+                ("door_interlock", "10) Interlocking of inspection doors on the furnace with the burner (F.O. & LDO)", "text", "Provided"),
+                ("expansion_tank_location", "11) Expansion cum desecrator tank and its location", "text", "At Sufficient Height"),
+                ("alarm_system", "12) Audio Visual alarm system", "text", "Provided"),
+                ("control_panel_condition", "13) Condition and location of control panel", "text", "Condition Satisfactory"),
+            ]),
+            ("14) Testing Thermic Fluid", [
+                ("tf_acidity", "a. Acidity (mg/KOH/gm of oil)", "text", "Within Limit"),
+                ("tf_suspended_matter", "b. Suspended Matter (%)", "text", "Within Limit"),
+                ("tf_ash_content", "c. Ash Content (%)", "text", "Within Limit"),
+                ("tf_viscosity", "d. Viscosity (40\u00b0C cST)", "text", "Within Limit"),
+                ("tf_flash_point", "e. Flash Point (\u00b0C)", "text", "Within Limit"),
+            ]),
+            ("15) & 16) Coil Pressure Test", [
+                ("coil_pressure_test", "15) Pressure test of the coils (to be performed every year)", "textarea", None),
+                ("last_test_details", "16) Last date & name of the person who carried out the test", "text", None),
+            ]),
+            ("Statutory Certification", [
+                ("certification_text", "Certification Text", "textarea",
+                 "I Certify that on {date} the Thermic Fluid Heater as described above is thoroughly examined and above is true report of my examination."),
+            ]),
+            ("Next Examination Dates", [
+                ("certification_date", "Certification Date", "date", "__today__"),
+                ("next_exam_date", "Next Test Due Date", "date", None),
+                ("reminder_date", "Reminder Date", "date", None),
+            ]),
+            ("Certifying Authority", [
+                ("competent_person_name", "Competent Person Name", "text", "Bipinchandra Madhavlal Patel"),
+                ("competent_person_no", "Competency Certificate No.", "text", "GUJ/DISH/CPT/A-1398/2024"),
+                ("competency_valid_from", "Competency Certificate Validity - From", "date", None),
+                ("competency_valid_to", "Competency Certificate Validity - To", "date", None),
+                ("competency_issued_by", "Issued By", "text",
+                 "Director, Industrial Safety & Health, Gujarat, Ahmedabad"),
+            ]),
+        ],
+        "finding_fields": [],
+    },
 }
 
 
@@ -940,7 +1157,7 @@ def _suggest_report_no(form_type=None, company_id=None):
     return _next_report_no(company_id)
 
 
-@inspections_bp.route("/next-report-no/<any(form9, form10, form11, psv, centrifuge):form_type>")
+@inspections_bp.route("/next-report-no/<any(form9, form10, form11, psv, centrifuge, form26a, tfh):form_type>")
 @login_required
 def next_report_no(form_type):
     from flask import jsonify
@@ -986,7 +1203,7 @@ def renumber_old_reports():
     return make_response("\n".join(lines), 200, {"Content-Type": "text/plain; charset=utf-8"})
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/")
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/")
 @login_required
 def generic_list(form_type):
     search = request.args.get("q", "").strip()
@@ -1019,13 +1236,13 @@ def generic_list(form_type):
     )
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/new", methods=["GET", "POST"])
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/new", methods=["GET", "POST"])
 @login_required
 def generic_new(form_type):
     return _generic_save(form_type, report=None)
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/<int:report_id>/edit", methods=["GET", "POST"])
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/<int:report_id>/edit", methods=["GET", "POST"])
 @login_required
 def generic_edit(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
@@ -1124,7 +1341,7 @@ def _generic_save(form_type, report):
     )
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/<int:report_id>/delete", methods=["POST"])
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/<int:report_id>/delete", methods=["POST"])
 @login_required
 def generic_delete(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
@@ -1134,7 +1351,7 @@ def generic_delete(form_type, report_id):
     return redirect(url_for("inspections.generic_list", form_type=form_type))
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/<int:report_id>/renew", methods=["POST"])
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/<int:report_id>/renew", methods=["POST"])
 @login_required
 def generic_renew(form_type, report_id):
     """Copies an existing report's data into a brand-new report (new Report
@@ -1160,7 +1377,7 @@ def generic_renew(form_type, report_id):
     return redirect(url_for("inspections.generic_edit", form_type=form_type, report_id=new_report.id))
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/<int:report_id>/pdf")
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/<int:report_id>/pdf")
 @login_required
 def generic_pdf(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
@@ -1175,7 +1392,8 @@ def generic_pdf(form_type, report_id):
     profile = CompanyProfile.query.first()
     header_html, footer_html = _pdf_header_footer_html(profile)
     try:
-        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html, fit_one_page=True)
+        pdf_bytes = _html_to_pdf_bytes(html, header_html=header_html, footer_html=footer_html,
+                                      fit_one_page=not config.get("multi_page"))
     except RuntimeError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("inspections.generic_list", form_type=form_type))
@@ -1202,11 +1420,14 @@ DUE_DATE_KEYS = {
     "form11": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
     "psv": ["next_exam_date"],
     "centrifuge": ["next_exam_date"],
+    "form26a": ["next_exam_date"],
+    "tfh": ["next_exam_date"],
 }
 
 FORM_LABELS = {
     "form9": "Form 9", "form10": "Form 10", "form11": "Form 11",
     "psv": "PSV", "centrifuge": "Centrifuge",
+    "form26a": "Form 26-A", "tfh": "Thermic Fluid Heater",
 }
 
 
@@ -1362,6 +1583,18 @@ EXCEL_COLUMNS = {
         ("Capacity", "capacity"),
         ("Location", "location"),
     ],
+    "form26a": [
+        ("System", "system_description"),
+        ("Hood Serial No.", "hood_serial_no"),
+        ("Location", "location"),
+        ("Volume Exhausted", "volume_exhausted"),
+    ],
+    "tfh": [
+        ("Sr. No.", "serial_no"),
+        ("Make", "make"),
+        ("Capacity", "capacity"),
+        ("Fuel Fired", "fuel_fired"),
+    ],
 }
 
 
@@ -1493,6 +1726,28 @@ EXCEL_LAYOUT = {
         "loc": ["location"],
         "insp": ["date_of_examination", "last_exam_date", "certification_date"],
         "due": ["next_exam_date", "next_ndt_date", "next_hydro_date"],
+    },
+    "form26a": {
+        "title": "INSPECTION & TESTING REPORT OF DUST / FUME EXTRACTION SYSTEMS (FORM NO. 26-A)",
+        "group": ["system_description"], "group_default": "Dust / Fume Extraction System",
+        "desc": [("Make", ["manufacturer_name"], True),
+                 ("Sr. No.", ["serial_no"], False),
+                 ("Fan", ["motor_speed_hp"], False)],
+        "tag": ["hood_serial_no"], "cap": ["volume_exhausted"], "cap_header": "Volume Exhausted",
+        "loc": ["location"],
+        "insp": ["certification_date"],
+        "due": ["next_exam_date"],
+    },
+    "tfh": {
+        "title": "INSPECTION & TESTING REPORT OF THERMIC FLUID HEATERS",
+        "group": ["unit_description"], "group_default": "Thermic Fluid Heater",
+        "desc": [("Make", ["make"], True),
+                 ("Fuel", ["fuel_fired"], False),
+                 ("Year of Mfg", ["year_of_mfg"], False)],
+        "tag": ["serial_no"], "cap": ["capacity"], "cap_header": "Capacity (Kcal/Hr)",
+        "loc": ["location"],
+        "insp": ["certification_date"],
+        "due": ["next_exam_date"],
     },
 }
 
@@ -1733,7 +1988,7 @@ def form9_export_excel():
     return response
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/export/pdf")
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/export/pdf")
 @login_required
 def generic_export_pdf(form_type):
     search = request.args.get("q", "").strip()
@@ -1760,7 +2015,7 @@ def generic_export_pdf(form_type):
     return response
 
 
-@inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/export/excel")
+@inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/export/excel")
 @login_required
 def generic_export_excel(form_type):
     search = request.args.get("q", "").strip()

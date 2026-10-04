@@ -197,10 +197,11 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  var EXAM_MONTHS = {{ (config.exam_months or 6)|tojson }};   // centrifuge = 12
   function autoFillExamDates(force) {
     var cert = F('certification_date');
     if (!cert) return;
-    var sixMonths = addMonthsISO(cert.value, 6);
+    var sixMonths = addMonthsISO(cert.value, EXAM_MONTHS);
     if (!sixMonths) return;                            // incomplete / invalid date
     var dueVal = addDaysISO(sixMonths, -1);            // one day before
     var remVal = addMonthsISO(dueVal, -1);             // one month before the due date

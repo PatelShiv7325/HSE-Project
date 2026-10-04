@@ -22,9 +22,14 @@
   {%- elif (v|string|trim|upper) in ['NA','N.A.','N.A','N/A','NIL','NOT APPLICABLE','AVAILABLE','NOT AVAILABLE','SATISFACTORY','GOOD','FOUND OK','OK','NONE','-'] -%}{{ v }}
   {%- else -%}{{ v }} {{ unit }}{%- endif -%}
 {%- endmacro %}
+{# uv: appends the unit only when the typed value has no letters (7.0 -> "7.0 Kg/cm²", 20,00,000 -> "20,00,000 Kcal/Hr"); text like "NA" or "7.0 Kg/cm2" prints as typed #}
+{% macro uv(v, unit) -%}
+  {%- set t = ((v or '')|string|trim) -%}
+  {%- if t and (t|lower|select('in', 'abcdefghijklmnopqrstuvwxyz')|list|length) == 0 -%}{{ t }} {{ unit }}{%- else -%}{{ t }}{%- endif -%}
+{%- endmacro %}
 <table class="header-bar-row hdr-main">
   <tr>
-    <td style="width:29%; text-align:center;">Test Report No.<br><strong>{{ report.report_no }}</strong></td>
+    <td style="width:29%; text-align:center;">{{ 'Certificate No.' if form_type == 'form26a' else 'Test Report No.' }}<br><strong>{{ report.report_no }}</strong></td>
     <td style="width:47%;">
       {% if form_type == 'form10' %}
         FORM NO. 10<br>(Prescribed under Rule 60)<br>Report of examination of lifting machines, ropes and lifting tackles particulars.
@@ -34,6 +39,10 @@
         FIELD CALIBRATION / TEST CERTIFICATE<br>OF PRESSURE SAFETY VALVE (PSV)
       {% elif form_type == 'centrifuge' %}
         TEST REPORT OF CENTRIFUGE MACHINE<br>(As prescribed under Section 21 &amp; Rule No. 54)
+      {% elif form_type == 'form26a' %}
+        Form No. 26 &ndash; A<br>(Prescribed under Rule 102)<br>TEST REPORT OF DUST/FUME &ndash; EXTRACTION SYSTEM
+      {% elif form_type == 'tfh' %}
+        CERTIFICATE<br>[Under Section 41 of the Factories Act, 148 and Rule 68-D]<br>Report for Inspection &amp; Testing of Thermic Fluid Heater
       {% else %}
         {{ config.label }}<br>{{ config.rule }}
       {% endif %}
@@ -318,6 +327,185 @@
         <div class="sign-title">
           {{ data.competent_person_title or 'Competent Person Declared by Director Industrial Safety & Health' }},<br>
           {{ data.competent_person_state or 'Gujarat' }} State, No: {{ data.competent_person_no or '' }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+{% elif form_type == 'form26a' %}
+  {# Form 26-A -- Test Report of Dust/Fume Extraction System #}
+  <table>
+    <tr><td class="no-col">1.</td><td colspan="2" class="label-col" style="width:44%;">Name of occupier of the Factory</td><td><strong>{{ data.occupier_name or (report.company.name if report.company else '') or 'NA' }}</strong></td></tr>
+    <tr><td class="no-col">2.</td><td colspan="2" class="label-col">Address of the Factory</td><td>{{ data.address|address_block(report.company.name if report.company else '') }}</td></tr>
+    <tr>
+      <td class="no-col">3.</td><td colspan="2" class="label-col">Description of System</td>
+      <td>
+        <strong>{{ data.system_description or 'NA' }}</strong><br>
+        {% if data.manufacturer_name %}Manufacturer's Name: {{ data.manufacturer_name }}<br>{% endif %}
+        {% if data.location %}Location: {{ data.location }}<br>{% endif %}
+        {% if data.serial_no %}Sr. No.: {{ data.serial_no }}<br>{% endif %}
+        {% if data.manufacturing_date %}Manufacturing date: {{ data.manufacturing_date|dmy }}<br>{% endif %}
+        {% if data.first_use_date %}First use in factory: {{ data.first_use_date|dmy }}<br>{% endif %}
+        {% if data.system_function %}Function: {{ data.system_function }}<br>{% endif %}
+        {% for cf in (data.custom_fields or []) %}{% if cf.name and cf.value %}{{ cf.name }}: {{ cf.value }}<br>{% endif %}{% endfor %}
+      </td>
+    </tr>
+
+    <tr><td class="no-col" rowspan="6" style="vertical-align:middle;">4.</td><td colspan="2" class="label-col">Hood</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td class="label-col">Serial No. of Hood</td><td>{{ data.hood_serial_no or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td class="label-col">Contaminant Captured</td><td>{{ data.contaminant_captured or 'NA' }}</td></tr>
+    <tr><td class="no-col">c.</td><td class="label-col">Captured Velocities</td><td>{{ data.captured_velocities or 'NA' }}</td></tr>
+    <tr><td class="no-col">d.</td><td class="label-col">Volume Exhausted at Hood</td><td>{{ data.volume_exhausted or 'NA' }}</td></tr>
+    <tr><td class="no-col">e.</td><td class="label-col">Hood Static Pressure</td><td>{{ data.hood_static_pressure or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="3" style="vertical-align:middle;">5.</td><td colspan="2" class="label-col">Total pressure drops at</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td class="label-col">Joints</td><td>{{ data.pressure_drop_joints or 'N.A.' }}</td></tr>
+    <tr><td class="no-col">b.</td><td class="label-col">Other Points of System</td><td>{{ data.pressure_drop_other or 'N.A.' }}</td></tr>
+
+    <tr><td class="no-col">6.</td><td colspan="2" class="label-col">Transport Velocity in Dust/Fume</td><td>{{ data.transport_velocity or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="5" style="vertical-align:middle;">7.</td><td colspan="2" class="label-col">Air Cleaning Device</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td class="label-col">Type used</td><td>{{ data.cleaner_type or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td class="label-col">Velocity at inlet</td><td>{{ data.velocity_inlet or 'NA' }}</td></tr>
+    <tr><td class="no-col">c.</td><td class="label-col">Velocity at outlet</td><td>{{ data.velocity_outlet or 'NA' }}</td></tr>
+    <tr><td class="no-col">d.</td><td class="label-col">Static Pressure at Inlet</td><td>{{ data.static_pressure_inlet or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="5" style="vertical-align:middle;">8.</td><td colspan="2" class="label-col">Fan</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td class="label-col">Type used</td><td>{{ data.fan_type or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td class="label-col">Volume handled</td><td>{{ data.fan_volume or 'NA' }}</td></tr>
+    <tr><td class="no-col">c.</td><td class="label-col">Static Pressure</td><td>{{ data.fan_static_pressure or 'NA' }}</td></tr>
+    <tr><td class="no-col">d.</td><td class="label-col">Pressure drops at outlet of fan</td><td>{{ data.fan_pressure_drop_outlet or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="3" style="vertical-align:middle;">9.</td><td colspan="2" class="label-col">Fan Motor:</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td class="label-col">Type</td><td>{{ data.motor_type or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td class="label-col">Speed and horse power</td><td>{{ data.motor_speed_hp or 'NA' }}</td></tr>
+
+    <tr><td class="no-col">10.</td><td colspan="2" class="label-col">Particulars of defects, if any, disclosed during testing of above components.</td><td>{{ data.defects_disclosed or 'NIL' }}</td></tr>
+  </table>
+
+  {% set f26_cert = data.certification_text or ('I, certify that on this {date} the above dust/fume extraction system was thoroughly cleaned and (so far as its construction permit) made accessible for thorough examination.\nI, further certify that on said date, I thoroughly examined the above dust/fume extraction system including its components and fittings and all the above is true report of any examination.') %}
+  {% for para in f26_cert.replace('\r', '').split('\n') if para.strip() %}
+  <p class="cert-para">{{ para.replace('{date}', data.certification_date|dmy) }}</p>
+  {% endfor %}
+
+  <table class="due-sign-table">
+    <tr>
+      <td style="width:45%;"><div class="due-date">NEXT DUE DATE : {{ data.next_exam_date|dmy }}</div></td>
+      <td style="width:55%;">
+        {% include "inspections/_sign_stamp.html" %}
+        <div class="sign-name">{{ data.competent_person_name or '' }}</div>
+        <div class="sign-title">
+          {% if data.competent_person_qualification %}Qualification: {{ data.competent_person_qualification }}<br>{% endif %}
+          Competency Certificate No: {{ data.competent_person_no or '' }}<br>
+          Dated: {{ data.certification_date|dmy }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+{% elif form_type == 'tfh' %}
+  {# Thermic Fluid Heater -- Section 41 / Rule 68-D report. 5-column grid: no | letter | number | label | value #}
+  <style>
+    .tfh-table { table-layout: fixed; }
+    .tfh-table tr { page-break-inside: avoid; }
+    .due-sign-table { page-break-inside: avoid; }
+    body { min-height: 485mm; }   /* 2 printable pages, so the side borders reach the footer on page 2 too */
+  </style>
+  <table>
+    <tr>
+      <td style="width:50%; text-align:center;"><strong>Reg. No.:</strong> {{ data.reg_no or '' }}</td>
+      <td style="width:50%; text-align:center;"><strong>License No.:</strong> {{ data.license_no or '' }}</td>
+    </tr>
+  </table>
+  <table class="tfh-table">
+    <colgroup><col style="width:24px;"><col style="width:24px;"><col style="width:24px;"><col><col style="width:37%;"></colgroup>
+    <tr><td class="no-col">1.</td><td colspan="3" class="label-col">Name of occupier or owner of the premises</td><td><strong>{{ data.occupier_name or (report.company.name if report.company else '') or 'NA' }}</strong></td></tr>
+    <tr><td class="no-col">2.</td><td colspan="3" class="label-col">Address of the Factory</td><td>{{ data.address|address_block(report.company.name if report.company else '') }}</td></tr>
+
+    <tr>
+      <td class="no-col" rowspan="7">3.</td><td colspan="3" class="label-col">Description of unit</td>
+      <td>
+        <strong>{{ data.unit_description or 'Thermic Fluid Heater' }}</strong>
+        {% for cf in (data.custom_fields or []) %}{% if cf.name and cf.value %}<br>{{ cf.name }}: {{ cf.value }}{% endif %}{% endfor %}
+      </td>
+    </tr>
+    <tr><td class="no-col">a)</td><td colspan="2" class="label-col">Sr. No. / Identification No.</td><td>{{ data.serial_no or 'NA' }}</td></tr>
+    <tr><td class="no-col">b)</td><td colspan="2" class="label-col">Make</td><td>{{ data.make or 'NA' }}</td></tr>
+    <tr><td class="no-col">c)</td><td colspan="2" class="label-col">Year of Mfg. / First Use</td><td>{{ data.year_of_mfg or 'NA' }}</td></tr>
+    <tr><td class="no-col">d)</td><td colspan="2" class="label-col">Fuel Fired</td><td>{{ data.fuel_fired or 'NA' }}</td></tr>
+    <tr><td class="no-col">e)</td><td colspan="2" class="label-col">Capacity</td><td>{{ uv(data.capacity, 'Kcal/Hr') or 'NA' }}</td></tr>
+    <tr><td class="no-col">f)</td><td colspan="2" class="label-col">Coil are removable or not and size of coils</td><td>{{ data.coil_details or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="4">4.</td><td colspan="3" class="label-col">Operating Parameters</td><td></td></tr>
+    <tr><td class="no-col">a)</td><td colspan="2" class="label-col">Pressure</td><td>{{ uv(data.op_pressure, 'Kg/cm²') or 'NA' }}</td></tr>
+    <tr><td class="no-col">b)</td><td colspan="2" class="label-col">Temperature</td><td>{{ uv(data.op_temperature, '°C') or 'NA' }}</td></tr>
+    <tr><td class="no-col">c)</td><td colspan="2" class="label-col">Velocity</td><td>{{ data.op_velocity or 'NA' }}</td></tr>
+
+    <tr><td class="no-col">5.</td><td colspan="3" class="label-col">Suitable arrangement for cooling of fluid in case of power failure.</td><td>{{ data.cooling_arrangement or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="7">6.</td><td colspan="3" class="label-col">Safety Devices provided for heater</td><td></td></tr>
+    <tr><td class="no-col" rowspan="3">a)</td><td colspan="2" class="label-col">Level control in the expansion tank</td><td></td></tr>
+    <tr><td class="no-col">1.</td><td class="label-col">Low level switch in the expansion tank</td><td>{{ data.sd_low_level_switch or 'NA' }}</td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">High level switch in the expansion tank</td><td>{{ data.sd_high_level_switch or 'NA' }}</td></tr>
+    <tr><td class="no-col">b)</td><td colspan="2" class="label-col">Temperature control of thermic fluid</td><td>{{ data.sd_temp_control or 'NA' }}</td></tr>
+    <tr><td class="no-col">c)</td><td colspan="2" class="label-col">Differential pressure switch on the outer line of heater tubes</td><td>{{ data.sd_diff_pressure_switch or 'NA' }}</td></tr>
+    <tr><td class="no-col">d)</td><td colspan="2" class="label-col">Temperature control devices for the fuel oil supply to the burner (Applicable in case of F.O. &amp; LDO)</td><td>{{ data.sd_fuel_oil_temp_control or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="9">7.</td><td class="no-col" rowspan="5">a)</td><td colspan="2" class="label-col">Interlock of burner for above stated safety devices at Sr. No.: 06 (Applicable in case of F.O / LDO &amp; Gas)</td><td></td></tr>
+    <tr><td class="no-col">1.</td><td class="label-col">With level control in the expansion tank.</td><td>{{ data.il_burner_level or 'NA' }}</td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">With temperature control of thermic fluid heater</td><td>{{ data.il_burner_temp or 'NA' }}</td></tr>
+    <tr><td class="no-col">3.</td><td class="label-col">With different pressure switch at outlet of heater tubes.</td><td>{{ data.il_burner_dp or 'NA' }}</td></tr>
+    <tr><td class="no-col">4.</td><td class="label-col">Temperature control devices for fuel oil supply to burner. (Application in case of F.O.)</td><td>{{ data.il_burner_fo_temp or 'NA' }}</td></tr>
+    <tr><td class="no-col" rowspan="4">b)</td><td colspan="2" class="label-col">Interlock for ID fan for above safety devices at Sr. No.06</td><td></td></tr>
+    <tr><td class="no-col">1.</td><td class="label-col">With level control in the expansion tank.</td><td>{{ data.il_idfan_level or 'NA' }}</td></tr>
+    <tr><td class="no-col">2.</td><td class="label-col">With temperature control of thermic fluid heater.</td><td>{{ data.il_idfan_temp or 'NA' }}</td></tr>
+    <tr><td class="no-col">3.</td><td class="label-col">With different pressure switch at outlet of heater tubes.</td><td>{{ data.il_idfan_dp or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="7">8.</td><td colspan="3" class="label-col">Other Safety devices</td><td></td></tr>
+    <tr><td class="no-col">a)</td><td colspan="2" class="label-col">Temperature Gauge / Temperature Controller</td><td>{{ data.os_temp_gauge or 'NA' }}</td></tr>
+    <tr><td class="no-col">b)</td><td colspan="2" class="label-col">Pressure Gauge</td><td>{{ data.os_pressure_gauge or 'NA' }}</td></tr>
+    <tr><td class="no-col">c)</td><td colspan="2" class="label-col">Flame failure system (Applicable in case of F.O. &amp; LDO)</td><td>{{ data.os_flame_failure or 'NA' }}</td></tr>
+    <tr><td class="no-col">d)</td><td colspan="2" class="label-col">Low atomizing medium pressure (Applicable in case of F.O. &amp; LDO)</td><td>{{ data.os_low_atomizing or 'NA' }}</td></tr>
+    <tr><td class="no-col">e)</td><td colspan="2" class="label-col">Low Thermic fluid flow through the system</td><td>{{ data.os_low_flow or 'NA' }}</td></tr>
+    <tr><td class="no-col">f)</td><td colspan="2" class="label-col">High Pressure at Heater outlet</td><td>{{ data.os_high_pressure or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="5">9.</td><td colspan="3" class="label-col">Additional Safety Measures (Applicable in case of F.O. &amp; LDO)</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td colspan="2" class="label-col">Low thermic fluid flow through the system</td><td>{{ data.as_low_flow or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td colspan="2" class="label-col">High pressure in expansion tank.</td><td>{{ data.as_high_pressure_tank or 'NA' }}</td></tr>
+    <tr><td class="no-col">c.</td><td colspan="2" class="label-col">High Pressure at heater outlet.</td><td>{{ data.as_high_pressure_outlet or 'NA' }}</td></tr>
+    <tr><td class="no-col">d.</td><td colspan="2" class="label-col">Thermic fluid pump motor tripping</td><td>{{ data.as_pump_trip or 'NA' }}</td></tr>
+
+    <tr><td class="no-col">10.</td><td colspan="3" class="label-col">Interlocking of inspection doors on the furnace with the burner (Applicable in case of F.O. &amp; LDO)</td><td>{{ data.door_interlock or 'NA' }}</td></tr>
+    <tr><td class="no-col">11.</td><td colspan="3" class="label-col">Expansion cum desecrator tank and its location</td><td>{{ data.expansion_tank_location or 'NA' }}</td></tr>
+    <tr><td class="no-col">12.</td><td colspan="3" class="label-col">Audio Visual alarm system</td><td>{{ data.alarm_system or 'NA' }}</td></tr>
+    <tr><td class="no-col">13.</td><td colspan="3" class="label-col">Condition and location of control panel</td><td>{{ data.control_panel_condition or 'NA' }}</td></tr>
+
+    <tr><td class="no-col" rowspan="6">14.</td><td colspan="3" class="label-col">Testing thermic fluid for following parameters</td><td></td></tr>
+    <tr><td class="no-col">a.</td><td colspan="2" class="label-col">Acidity (mg/KOH/gm of oil)</td><td>{{ data.tf_acidity or 'NA' }}</td></tr>
+    <tr><td class="no-col">b.</td><td colspan="2" class="label-col">Suspended Matter (%)</td><td>{{ data.tf_suspended_matter or 'NA' }}</td></tr>
+    <tr><td class="no-col">c.</td><td colspan="2" class="label-col">Ash Content (%)</td><td>{{ data.tf_ash_content or 'NA' }}</td></tr>
+    <tr><td class="no-col">d.</td><td colspan="2" class="label-col">Viscosity (40°C cST)</td><td>{{ data.tf_viscosity or 'NA' }}</td></tr>
+    <tr><td class="no-col">e.</td><td colspan="2" class="label-col">Flash Point (°C)</td><td>{{ data.tf_flash_point or 'NA' }}</td></tr>
+
+    <tr><td class="no-col">15.</td><td colspan="3" class="label-col">Pressure test of the coils, (To be performed every year)</td><td>{{ data.coil_pressure_test or 'NA' }}</td></tr>
+    <tr><td class="no-col">16.</td><td colspan="3" class="label-col">Last date &amp; Name of the person who carried out the test</td><td>{{ data.last_test_details or 'NA' }}</td></tr>
+  </table>
+
+  <p class="cert-para">
+    {{ (data.certification_text or 'I Certify that on {date} the Thermic Fluid Heater as described above is thoroughly examined and above is true report of my examination.').replace('{date}', data.certification_date|dmy) }}
+  </p>
+
+  <table class="due-sign-table">
+    <tr>
+      <td style="width:42%;"><div class="due-date">NEXT TEST DUE DATE : {{ data.next_exam_date|dmy }}</div></td>
+      <td style="width:58%;">
+        {% include "inspections/_sign_stamp.html" %}
+        <div class="sign-name">{{ data.competent_person_name or '' }}</div>
+        <div class="sign-title">
+          Competent Person<br>
+          Competency Certi. No.: {{ data.competent_person_no or '' }}<br>
+          {% if data.competency_valid_from or data.competency_valid_to %}Competency Certi. Validity: {{ data.competency_valid_from|dmy }} to {{ data.competency_valid_to|dmy }}<br>{% endif %}
+          Issued By: {{ data.competency_issued_by or 'Director, Industrial Safety & Health, Gujarat, Ahmedabad' }}
         </div>
       </td>
     </tr>

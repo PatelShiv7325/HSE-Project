@@ -179,6 +179,16 @@
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
           <span class="nav-label">Centrifuge Report</span>
         </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/form26a') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='form26a') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Form 26-A - Dust/Fume</span>
+        </a>
+        <a class="nav-item nav-subitem {% if request.path.startswith('/inspections/tfh') %}active{% endif %}" href="{{ url_for('inspections.generic_list', form_type='tfh') }}">
+          <span class="step-dot"></span>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          <span class="nav-label">Thermic Fluid Heater</span>
+        </a>
       </div>
     </details>
 

@@ -16,6 +16,8 @@ FORM_TYPE_LABELS = {
     "form11": "Form 11 - Pressure Vessel",
     "psv": "PSV Certificate",
     "centrifuge": "Centrifuge Report",
+    "form26a": "Form 26-A - Dust/Fume Extraction",
+    "tfh": "Thermic Fluid Heater",
 }
 
 # Edit/PDF endpoint names per form type. Form 9 uses its own hand-built
@@ -28,6 +30,8 @@ FORM_TYPE_ENDPOINTS = {
     "form11": {"edit": "inspections.generic_edit", "pdf": "inspections.generic_pdf"},
     "psv": {"edit": "inspections.generic_edit", "pdf": "inspections.generic_pdf"},
     "centrifuge": {"edit": "inspections.generic_edit", "pdf": "inspections.generic_pdf"},
+    "form26a": {"edit": "inspections.generic_edit", "pdf": "inspections.generic_pdf"},
+    "tfh": {"edit": "inspections.generic_edit", "pdf": "inspections.generic_pdf"},
 }
 
 
