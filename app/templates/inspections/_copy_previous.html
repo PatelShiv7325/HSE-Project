@@ -88,13 +88,19 @@
       }
       if (val == null || val === '') return;            // never blank out a field
       var el = form.querySelector('[name="' + key + '"]');
-      if (el) el.value = val;
+      if (!el) return;
+      if (el.type === 'checkbox') { el.checked = (val === true || val === '1' || val === 'true'); return; }
+      if (el.tagName === 'SELECT' && !Array.prototype.some.call(el.options, function (o) { return o.value === String(val); })) {
+        el.add(new Option(val, val));                       // keep older free-text values selectable
+      }
+      el.value = val;
     });
+    if (typeof examTypesRefresh === 'function') examTypesRefresh();   // show/hide the Date boxes
   }
 
   function recalcDates() {
     var form = document.querySelector('form[method="post"]');
-    ['next_exam_date', 'reminder_date'].forEach(function (n) {
+    ['next_exam_date', 'next_ndt_date', 'next_hydro_date', 'reminder_date'].forEach(function (n) {
       var el = form.querySelector('[name="' + n + '"]'); if (el) el.value = '';
     });
     if (typeof autoFillExamDates === 'function') autoFillExamDates(true);
@@ -149,6 +155,30 @@
     return m[1] + n + m[3];
   }
 
+  // Occupier / address / registration / license / NIC are the same for a company
+  // on every form. If the form still has any of them empty after copying, borrow
+  // them from the company's most recent report of ANY form type (e.g. its Form 9).
+  var IDENTITY = ['occupier_name', 'address', 'reg_no', 'license_no', 'nic_code'];
+  function fieldByName(k) {
+    return document.querySelector('form[method="post"] [name="' + k + '"]');
+  }
+  function fillIdentityGaps(companyId) {
+    if (!companyId) return;
+    var missing = IDENTITY.filter(function (k) { var el = fieldByName(k); return el && !el.value; });
+    if (!missing.length) return;
+    fetch(URL_BASE + '?limit=30&any_form=1&company_id=' + encodeURIComponent(companyId),
+          { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (rows) {
+        rows.forEach(function (row) {
+          missing.forEach(function (k) {
+            var v = (row.data || {})[k], el = fieldByName(k);
+            if (v && el && !el.value) el.value = v;
+          });
+        });
+      }).catch(function () {});
+  }
+
   // Clicking a row in the popup
   window.cpApply = function (i) {
     var r = CURRENT[i];
@@ -158,10 +188,12 @@
     var comp = findCompany(r);
     if (cid) cid.value = comp ? comp.id : '';
     if (cs) cs.value = comp ? comp.name : '';
+    document.dispatchEvent(new Event('company-selected'));
     fillFromReport(r);
     var rn = document.querySelector('form[method="post"] [name="report_no"]');
     if (rn && !rn.value) rn.value = nextReportNo(r.report_no);
     recalcDates();
+    fillIdentityGaps(comp ? comp.id : '');
     cpClose();
   };
 
@@ -194,6 +226,8 @@
             if (any.length) fillFromReport(any[0], 'competent_person_');
           });
         }
+      }).then(function () {
+        fillIdentityGaps(companyId);
       }).catch(function () {});
     };
   });

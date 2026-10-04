@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
 from flask_login import login_required, current_user
 from app import db
@@ -165,6 +165,20 @@ def _companies_json():
         for c in Company.query.order_by(Company.name.asc()).all()
     ]
 
+
+def _remember_company_details(company_id, data):
+    """After saving a report, copy occupier / address / registration / license
+    into the Company record -- ONLY into fields that are still empty there --
+    so the next form for that company auto-fills them when it is selected."""
+    company = Company.query.get(company_id) if company_id else None
+    if not company:
+        return
+    for attr, key in (("occupier_name", "occupier_name"), ("address", "address"),
+                      ("registration_no", "reg_no"), ("license_no", "license_no")):
+        value = (data.get(key) or "").strip()
+        if value and not getattr(company, attr):
+            setattr(company, attr, value)
+
 # Every field that lives inside InspectionReport.data for a Form 9
 # (Hoists/Lifts examination certificate). report_no and report_date are
 # stored as real columns (for search/sort/uniqueness); everything else
@@ -231,9 +245,15 @@ def _add_months(d, months):
     return d.replace(year=year, month=month, day=min(d.day, calendar.monthrange(year, month)[1]))
 
 
-def _fill_exam_dates(data):
-    """Server-side safety net: if Certification Date is set but Next Exam Due /
-    Reminder Date were left blank, fill them (+6 months -1 day, and 1 month before that)."""
+def _fill_exam_dates(data, form_type=None):
+    """Server-side safety net for the dates the browser normally auto-fills.
+    Only fills values that were left blank -- never overwrites what the user typed.
+
+      Next Exam / Next NDT Due = Certification Date + 6 months - 1 day
+      Next Hydro Due (Form 11) = Hydraulic exam date (or Certification Date) + 2 years - 1 day
+      Reminder Date            = Next Exam / NDT Due - 1 month
+    """
+    from datetime import timedelta
     cert = data.get("certification_date")
     if not cert:
         return
@@ -241,13 +261,47 @@ def _fill_exam_dates(data):
         cert_d = _parse_date(cert)
     except (ValueError, TypeError):
         return
-    from datetime import timedelta
-    # Next Exam Due = Certification + 6 months - 1 day; Reminder = Next Exam - 1 month
     due_d = _add_months(cert_d, 6) - timedelta(days=1)
     if not data.get("next_exam_date"):
         data["next_exam_date"] = due_d.isoformat()
+    if form_type == "form11":
+        if not data.get("next_ndt_date"):
+            data["next_ndt_date"] = due_d.isoformat()
+        if not data.get("next_hydro_date"):
+            base = cert_d
+            if data.get("last_hydraulic_exam") == "Date" and data.get("last_hydraulic_exam_date"):
+                try:
+                    base = _parse_date(data["last_hydraulic_exam_date"])
+                except (ValueError, TypeError):
+                    base = cert_d
+            data["next_hydro_date"] = (_add_months(base, 24) - timedelta(days=1)).isoformat()
     if not data.get("reminder_date"):
         data["reminder_date"] = _add_months(due_d, -1).isoformat()
+
+
+def _profile_image_uri(filename):
+    """Signature / stamp uploaded on the My Company page, as a base64 data: URI
+    (the PDF renders in a separate process, so /static URLs would not resolve)."""
+    import base64
+    import mimetypes
+    import os
+    if not filename:
+        return ""
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                        "static", "uploads", "company", filename)
+    if not os.path.isfile(path):
+        return ""
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    with open(path, "rb") as f:
+        return f"data:{mime};base64," + base64.b64encode(f.read()).decode("ascii")
+
+
+def _sign_stamp_uris():
+    profile = CompanyProfile.query.first()
+    if not profile:
+        return "", ""
+    return (_profile_image_uri(profile.signature_filename),
+            _profile_image_uri(profile.stamp_filename))
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +320,10 @@ def previous_reports(form_type):
     company_id = request.args.get("company_id", type=int)
     limit = max(1, min(request.args.get("limit", 30, type=int), 30))
 
-    query = InspectionReport.query.filter_by(form_type=form_type)
+    if request.args.get("any_form") == "1":
+        query = InspectionReport.query          # used to borrow occupier/address/reg/license from any form
+    else:
+        query = InspectionReport.query.filter_by(form_type=form_type)
     if company_id:
         query = query.filter(InspectionReport.company_id == company_id)
     if exclude_id:
@@ -385,6 +442,7 @@ def _form9_save(report):
         report.report_date = _parse_date(request.form.get("date")) or date.today()
         report.occupier_name = data.get("occupier_name")
         report.data = data
+        _remember_company_details(report.company_id, data)
         db.session.commit()
 
         flash("Form 9 report saved.", "success")
@@ -396,6 +454,7 @@ def _form9_save(report):
         report=report,
         data=(report.data if report else {}),
         today=date.today().isoformat(),
+        suggested_report_no=(report.report_no if report else _next_report_no()),
         companies=Company.query.order_by(Company.name.asc()).all(),
         companies_json=_companies_json(),
     )
@@ -448,37 +507,55 @@ FORMS_CONFIG = {
     "form10": {
         "label": "Form 10 - Lifting Machines / Cranes",
         "rule": "(Prescribed under Rule 60)",
+        # "Manage Custom Fields" button is shown right after this section
+        "custom_fields_section": "3) Equipment Identification",
+        "required": ["certification_date", "next_exam_date", "reminder_date",
+                     "competent_person_name", "competent_person_no"],
+        "auto_dates": True,
+        "options": {
+            "heat_treatment_details": ["Not applicable"],
+        },
         "sections": [
-            ("Registration", [
+            ("Report Identifiers", [
                 ("reg_no", "Registration No.", "text", None),
                 ("license_no", "License No.", "text", None),
                 ("nic_code", "NIC Code", "text", None),
             ]),
-            ("Equipment", [
+            ("3) Equipment Identification", [
                 ("equipment_description", "Equipment Description", "text", None),
                 ("serial_no", "Serial No.", "text", None),
                 ("make", "Make", "text", None),
                 ("capacity", "Capacity", "text", None),
                 ("location", "Location", "text", None),
             ]),
-            ("Dates", [
-                ("first_use_date", "First Use Date", "text", None),
+            ("4) Date of First Use", [
+                ("first_use_date", "Date when the lifting machine, chain, rope or lifting tackle was first used in the factory", "text", None),
+            ]),
+            ("5) Examination Details", [
+                ("examination_details_text", "Date of each examination made under section 29(1)(a)(iii) and by whom it was carried out", "textarea", None),
                 ("last_exam_date", "Last Exam Date", "date", None),
                 ("examination_date", "Examination Date", "text", None),
                 ("examined_by", "Examined By", "text", None),
             ]),
-            ("Findings", [
-                ("examination_details_text", "Examination Details", "textarea", None),
-                ("certificate_details", "Certificate Details", "textarea", None),
-                ("heat_treatment_details", "Heat Treatment Details", "textarea", None),
-                ("defects_found", "Defects Found", "textarea", None),
+            ("6) Certificate of Test (Rule 60/1)", [
+                ("certificate_details", "Date and number of the certificate relating to any test and examination made under sub-rule (1) of rule 60, with the name of the person who issued it", "textarea", None),
             ]),
-            ("Certification", [
+            ("7) Annealing / Heat Treatment (Rule 60/5)", [
+                ("heat_treatment_details", "Date of annealing or other heat treatment (sub-rule 5 of rule 60) and by whom it was carried out", "text", None),
+            ]),
+            ("8) Particulars of Defects & Safe Working Load", [
+                ("defects_found", "Particulars of any defect found at any such examination or after annealing and affecting the safe working load, and the steps taken to remedy it", "textarea", None),
+            ]),
+            ("Statutory Certification", [
                 ("certification_text", "Certification Text", "textarea",
                  "I certify that on {date} the lifting machine, chain, rope or lifting tackle described above was thoroughly examined and that the above is a true report of the result of the examination."),
-                ("certification_date", "Certification Date", "date", None),
+            ]),
+            ("Next Examination Dates", [
+                ("certification_date", "Certification Date", "date", "__today__"),
                 ("next_exam_date", "Next Exam Date", "date", None),
                 ("reminder_date", "Reminder Date", "date", None),
+            ]),
+            ("Certifying Authority", [
                 ("competent_person_name", "Competent Person Name", "text", None),
                 ("competent_person_title", "Title", "text", "Competent Person Declared by Director"),
                 ("competent_person_authority", "Authority", "text", "Industrial Safety & Health Gujarat State"),
@@ -491,35 +568,78 @@ FORMS_CONFIG = {
     "form11": {
         "label": "Form 11 - Pressure Vessel",
         "rule": "(Prescribed under Rule 61 of GFR 1963)",
+        "custom_fields_section": "3) Vessel Details",
+        # Unit labels shown inside the input boxes (key -> unit text).
+        "units": {
+            "capacity": "KL", "temperature": "\u00b0C", "pressure": "kg/cm\u00b2",
+            "safe_working_pressure": "KG/CM\u00b2", "recommended_swp": "KG/CM\u00b2",
+            "reduced_working_pressure": "KG/CM\u00b2", "calculated_swp": "KG/CM\u00b2",
+            "thickness_shell": "mm", "thickness_jacket": "mm", "thickness_limpet": "mm",
+            "thickness_pipeline": "mm", "ultrasonic_shell": "mm", "ultrasonic_jacket": "mm",
+            "ultrasonic_limpet": "mm", "ultrasonic_pipeline": "mm",
+        },
+        # "Last ... exam" selectors: First Time / By Manufacturer / Date.
+        # Choosing "Date" reveals <key>_date and <key>_comment (hidden otherwise).
+        "exam_types": {
+            "last_external_exam": "7a) Last external examination",
+            "last_hydraulic_exam": "7c) Last hydraulic examination",
+            "last_ultrasonic_test": "7d) Last ultrasonic / NDT",
+        },
+        # Must be filled before saving (checked in the browser AND on the server).
+        "required": ["certification_date", "next_ndt_date", "next_hydro_date",
+                     "reminder_date", "competent_person_name", "competent_person_no"],
+        # Date fields that are auto-calculated from the Certification Date.
+        "auto_dates": True,
+        "options": {
+            "last_internal_exam": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+            "lagging_removed": ["Lagging provided", "Lagging Partial Removed", "Not Applicable"],
+            "vessel_condition": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+            "piping_condition": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+            "pressure_gauges_condition": ["Available", "Not Applicable"],
+            "safety_valve_condition": ["Available", "Not Applicable"],
+            "stop_valve_condition": ["Available", "Not Applicable"],
+            "reducing_valve_condition": ["Available", "Not Applicable"],
+            "additional_safety_valve_condition": ["Available", "Not Applicable"],
+            "other_devices_condition": ["Available", "Not Applicable"],
+            "repairs_period": ["Available", "Not Applicable", "Nil"],
+            "reduced_working_pressure": ["Not Applicable", "NA", "Nil"],
+            "calculated_swp": ["Available", "Not Applicable", "Nil"],
+        },
         "sections": [
-            ("Registration", [
+            ("Report Identifiers", [
                 ("reg_no", "Registration No.", "text", None),
                 ("license_no", "License No.", "text", None),
                 ("nic_code", "NIC Code", "text", None),
             ]),
-            ("Vessel Details", [
+            ("3) Vessel Details", [
                 ("vessel_name", "Vessel Name", "text", None),
                 ("vessel_description", "Vessel Description", "text", None),
                 ("tag_no", "Tag No.", "text", None),
                 ("capacity", "Capacity", "text", None),
                 ("location", "Location", "text", None),
+            ]),
+            ("4) Name and Address of Manufacturers", [
                 ("manufacturer", "Manufacturer", "text", None),
+            ]),
+            ("5) Nature of Process (including temperature and pressure parameters)", [
                 ("nature_of_process", "Nature of Process", "text", None),
                 ("temperature", "Temperature", "text", None),
                 ("pressure", "Pressure", "text", None),
+            ]),
+            ("6) Particulars of Pressure Vessel or Plant", [
                 ("date_of_construction", "Date of Construction", "date", None),
                 ("safe_working_pressure", "Safe Working Pressure", "text", None),
-            ]),
-            ("Thickness", [
                 ("thickness_shell", "Shell Thickness", "text", None),
                 ("thickness_jacket", "Jacket Thickness", "text", None),
                 ("thickness_limpet", "Limpet Thickness", "text", None),
                 ("thickness_pipeline", "Pipeline Thickness", "text", None),
             ]),
-            ("Examination History", [
+            ("7) Date of", [
                 ("first_use_date", "First Use Date", "date", None),
                 ("last_exam_date", "Last Exam Date", "date", None),
                 ("last_external_exam", "Last External Exam", "text", None),
+                ("last_external_exam_date", "Last External Exam Date", "date", None),
+                ("last_external_exam_comment", "Last External Exam Comment", "text", None),
                 ("last_internal_exam", "Last Internal Exam", "text", "Not Applicable"),
                 ("last_hydraulic_exam", "Last Hydraulic Exam", "text", None),
                 ("last_hydraulic_exam_date", "Last Hydraulic Exam Date", "date", None),
@@ -529,8 +649,10 @@ FORMS_CONFIG = {
                 ("last_ultrasonic_test_comment", "Last Ultrasonic Test Comment", "text", None),
                 ("last_hydro_test_date", "Last Hydro Test Date", "date", None),
             ]),
-            ("Findings", [
+            ("8) Whether lagging was removed for purposes of examination", [
                 ("lagging_removed", "Lagging Removed", "text", None),
+            ]),
+            ("9) Description of examinations carried out and findings", [
                 ("external_findings", "External Findings", "textarea", None),
                 ("internal_findings", "Internal Findings", "textarea", None),
                 ("ultrasonic_findings", "Ultrasonic Findings", "textarea", None),
@@ -538,8 +660,12 @@ FORMS_CONFIG = {
                 ("ultrasonic_jacket", "Ultrasonic - Jacket", "text", None),
                 ("ultrasonic_limpet", "Ultrasonic - Limpet", "text", None),
                 ("ultrasonic_pipeline", "Ultrasonic - Pipeline", "text", None),
+            ]),
+            ("10) Condition of Pressure Plants", [
                 ("vessel_condition", "Vessel Condition", "text", None),
                 ("piping_condition", "Piping Condition", "text", None),
+            ]),
+            ("11) Condition of Fitting and Appliances", [
                 ("pressure_gauges_condition", "Pressure Gauges Condition", "text", None),
                 ("safety_valve_condition", "Safety Valve Condition", "text", None),
                 ("stop_valve_condition", "Stop Valve Condition", "text", None),
@@ -547,25 +673,37 @@ FORMS_CONFIG = {
                 ("additional_safety_valve_condition", "Additional Safety Valve Condition", "text", None),
                 ("other_devices_condition", "Other Devices Condition", "text", None),
             ]),
-            ("Repairs & Safety", [
+            ("12) Safe Working Pressure Recommended After Examinations", [
+                ("recommended_swp", "Recommended SWP", "text", None),
+            ]),
+            ("13) Repairs & Other Conditions", [
                 ("repairs_required", "Repairs Required", "textarea", None),
                 ("repairs_period", "Repairs Period", "text", None),
                 ("safety_conditions", "Safety Conditions", "textarea",
                  "Client is advised for regular Testing of Safety Valve & Keeping Records Every Year."),
+            ]),
+            ("14) Reduced Working Pressure Pending Repairs", [
                 ("reduced_working_pressure", "Reduced Working Pressure", "text", "Not Applicable"),
+            ]),
+            ("15) Safe Working Pressure Calculated (Sub-Rule 8, thin walled vessel or plant)", [
                 ("calculated_swp", "Calculated SWP", "text", None),
-                ("recommended_swp", "Recommended SWP", "text", None),
+            ]),
+            ("16) Other Observations", [
                 ("other_observations", "Other Observations", "textarea",
                  "Pressure Gauge and Safety Valve should be checked periodically to ensure correct functioning and safe operation. Proper inspection and maintenance records should be maintained for compliance and safety purposes."),
             ]),
-            ("Certification", [
+            ("Statutory Certification", [
                 ("certification_text", "Certification Text", "textarea",
                  "I certify that on {date} the pressure vessel or plant described above was thorough cleaned and (so far, its construction permits) made accessible for thorough examination and for such tests as were necessary for thorough examination and that on the said date I thoroughly examination this pressure vessel or plants, including its fitting and that above is a true report of examination."),
-                ("certification_date", "Certification Date", "date", None),
+            ]),
+            ("Next Examination Dates", [
+                ("certification_date", "Certification Date", "date", "__today__"),
                 ("next_ndt_date", "Next NDT Date", "date", None),
                 ("next_hydro_date", "Next Hydro Date", "date", None),
                 ("next_exam_date", "Next Exam Date", "date", None),
                 ("reminder_date", "Reminder Date", "date", None),
+            ]),
+            ("Certifying Authority", [
                 ("competent_person_name", "Competent Person Name", "text", None),
                 ("competent_person_title", "Title", "text", "Competent Person Declared by Director"),
                 ("competent_person_authority", "Authority", "text", "Industrial Safety & Health Gujarat State"),
@@ -582,36 +720,54 @@ FORMS_CONFIG = {
     "psv": {
         "label": "PSV - Pressure Safety Valve Certificate",
         "rule": "Pressure Safety Valve Test Certificate",
+        "units": {"set_pressure": "kg/cm\u00b2", "temperature": "\u00b0C", "humidity": "%",
+                  "operated_at": "kg/cm\u00b2"},
+        "required": ["next_exam_date", "reminder_date", "competent_person_name", "competent_person_no"],
+        "options": {},
         "sections": [
-            ("Valve Details", [
+            ("3) Fitted Location", [
                 ("fitted_location", "Fitted Location", "text", None),
+            ]),
+            ("4) Year of Mfg.", [
                 ("year_of_mfg", "Year of Manufacture", "text", None),
+            ]),
+            ("5) Make", [
                 ("make", "Make", "text", None),
-                ("humidity", "Humidity", "text", None),
+            ]),
+            ("6) Set Pressure", [
                 ("set_pressure", "Set Pressure", "text", None),
+            ]),
+            ("7) Temperature", [
                 ("temperature", "Temperature", "text", None),
             ]),
-            ("Testing Standard & Traceability", [
-                ("cal_std_used", "Calibration Standard Used", "text", None),
-                ("cal_accuracy", "Calibration Accuracy", "text", None),
-                ("cal_make", "Calibration Equipment Make", "text", None),
+            ("8) Relative Humidity", [
+                ("humidity", "Humidity", "text", None),
+            ]),
+            ("9) Testing Standard Used & Traceability", [
+                ("cal_std_used", "Cal. Std. Used", "text", None),
+                ("cal_accuracy", "Accuracy", "text", None),
+                ("cal_make", "Make", "text", None),
                 ("cal_by", "Calibrated By", "text", None),
-                ("cal_equip_used", "Calibration Equipment Used", "text", None),
-                ("cal_cert_no", "Calibration Certificate No.", "text", None),
-                ("cal_model", "Calibration Equipment Model", "text", None),
-                ("cal_date", "Calibration Date", "date", None),
-                ("cal_sr_no", "Calibration Equipment Sr. No.", "text", None),
-                ("cal_due", "Calibration Due Date", "date", None),
-                ("cal_range", "Calibration Range", "text", None),
+                ("cal_equip_used", "Equip. Used", "text", None),
+                ("cal_cert_no", "Certificate No.", "text", None),
+                ("cal_model", "Model", "text", None),
+                ("cal_date", "Calibration Date", "date", "__today__"),
+                ("cal_sr_no", "Sr. No.", "text", None),
+                ("cal_due", "Calibration Due", "date", "__plus1y__"),
+                ("cal_range", "Range", "text", None),
                 ("cal_least_count", "Least Count", "text", None),
                 ("cal_traceability", "Traceability", "text", None),
-                ("operated_at", "Operated At", "text", None),
             ]),
-            ("Certification", [
-                ("next_exam_date", "Next Exam Date", "date", None),
-                ("reminder_date", "Reminder Date", "date", None),
-                ("competent_person_name", "Competent Person Name", "text", None),
-                ("competent_person_no", "Competent Person No.", "text", None),
+            ("10) Testing Result", [
+                ("operated_at", "Operated At (Kg/Cm²)", "text", None),
+            ]),
+            ("11) Next Examination Dates", [
+                ("next_exam_date", "Next Exam Date", "date", "__plus1y__"),
+                ("reminder_date", "Reminder Date", "date", "__plus1y_m1__"),
+            ]),
+            ("12) Certifying Authority", [
+                ("competent_person_name", "Competent Person Name", "text", "Amit H. Jethwa"),
+                ("competent_person_no", "Competent Person No.", "text", "AM-3177303"),
                 ("competent_person_state", "State", "text", None),
                 ("competent_person_title", "Title", "text", "CHARTER ENGINEER"),
             ]),
@@ -621,42 +777,73 @@ FORMS_CONFIG = {
     "centrifuge": {
         "label": "Centrifuge Machine Test Report",
         "rule": "Centrifuge Machine Test Report",
+        "custom_fields_section": "3) Machine Identity",
+        "units": {"basket_speed": "RPM", "operating_speed_stamped": "RPM"},
+        "required": ["certification_date", "next_exam_date", "reminder_date",
+                     "competent_person_name", "competent_person_no"],
+        "auto_dates": True,
+        "options": {
+            "condition_of_machine": ["Satisfactory", "Not Applicable"],
+            "interlock_top_cover": ["Satisfactory", "Not Applicable"],
+            "interlock_mechanical_breaker": ["Satisfactory", "Not Applicable"],
+            "earthing_provided": ["Satisfactory", "Not Applicable"],
+        },
         "sections": [
-            ("Registration", [
+            ("Report Identifiers", [
                 ("license_no", "License No.", "text", None),
             ]),
-            ("Machine Details", [
+            ("3) Machine Identity", [
                 ("machine_name_description", "Machine Name/Description", "text", None),
                 ("machine_name", "Machine Name", "text", None),
                 ("tag_no", "Tag No.", "text", None),
                 ("capacity", "Capacity", "text", None),
                 ("location", "Location", "text", None),
+            ]),
+            ("4) Manufacturer", [
                 ("manufacturer_name_address", "Manufacturer Name & Address", "textarea", None),
+            ]),
+            ("5) Machine Particulars", [
                 ("date_of_construction", "Date of Construction", "date", None),
                 ("machine_size", "Machine Size", "text", None),
             ]),
-            ("Safety Checks", [
+            ("6) Machine Condition", [
                 ("condition_of_machine", "Condition of Machine", "text", "Satisfactory"),
+            ]),
+            ("7) Inter Locking System", [
                 ("interlock_top_cover", "Interlock - Top Cover", "text", "Satisfactory"),
                 ("interlock_mechanical_breaker", "Interlock - Mechanical Breaker", "text", "Satisfactory"),
+            ]),
+            ("8) Earthing Provided", [
                 ("earthing_provided", "Earthing Provided", "text", "Satisfactory"),
+            ]),
+            ("9) Basket Speed", [
                 ("basket_speed", "Basket Speed", "text", None),
                 ("operating_speed_stamped", "Operating Speed (Stamped)", "text", None),
             ]),
-            ("Examination", [
+            ("10) Last Examination", [
                 ("last_exam_date", "Last Exam Date", "date", None),
+            ]),
+            ("11) Remarks", [
                 ("remarks", "Remarks", "textarea", None),
-                ("date_of_examination", "Date of Examination", "date", None),
+            ]),
+            ("12) Date of Examination", [
+                ("date_of_examination", "Date of Examination", "date", "__today__"),
+            ]),
+            ("13) Defects & Remedies", [
                 ("defects_and_remedies", "Defects & Remedies", "textarea", None),
             ]),
-            ("Certification", [
-                ("certification_date", "Certification Date", "date", None),
+            ("Statutory Certification", [
                 ("certification_text", "Certification Text", "textarea",
                  "I certify that on {date} I have thoroughly examined the centrifuge machine described above and the above is a correct report of the result of such examination."),
+            ]),
+            ("Next Examination Dates", [
+                ("certification_date", "Certification Date", "date", "__today__"),
                 ("next_exam_date", "Next Exam Date", "date", None),
                 ("next_ndt_date", "Next NDT Date", "date", None),
                 ("next_hydro_date", "Next Hydro Date", "date", None),
                 ("reminder_date", "Reminder Date", "date", None),
+            ]),
+            ("Certifying Authority", [
                 ("competent_person_name", "Competent Person Name", "text", None),
                 ("competent_person_no", "Competent Person No.", "text", None),
                 ("competent_person_state", "State", "text", "Gujarat"),
@@ -672,6 +859,23 @@ FORMS_CONFIG = {
 }
 
 
+def _resolve_default(default):
+    """Static defaults pass through; the __today__ / __plus1y__ /
+    __plus1y_m1__ markers are turned into ISO dates (today, today+1 year-1 day,
+    and one month before that) -- same defaults the new DISH software uses."""
+    if not default or not isinstance(default, str) or not default.startswith("__"):
+        return default
+    today = date.today()
+    if default == "__today__":
+        return today.isoformat()
+    due = _add_months(today, 12) - timedelta(days=1)
+    if default == "__plus1y__":
+        return due.isoformat()
+    if default == "__plus1y_m1__":
+        return _add_months(due, -1).isoformat()
+    return default
+
+
 def _fields_for(form_type):
     """Flat list of (key, label, input_type, default) across every section."""
     fields = []
@@ -680,17 +884,82 @@ def _fields_for(form_type):
     return fields
 
 
-def _suggest_report_no(form_type):
-    """FORM10/2026/0001-style suggestion, just a prefill -- the user can
-    still change it before saving, and _generic_save re-checks uniqueness."""
-    from datetime import date as _date
-    year = _date.today().year
-    count = InspectionReport.query.filter(
-        InspectionReport.form_type == form_type,
-        db.extract("year", InspectionReport.report_date) == year,
-    ).count()
-    prefix = form_type.upper()
-    return f"{prefix}/{year}/{count + 1:04d}"
+def _company_code(company_name):
+    """First letter of each word of the company name, upper-cased
+    ("M/S MISTRY ENGINEERING" -> "MME"). No company -> "TEMP"."""
+    letters = []
+    for word in (company_name or "").split():
+        if word.upper().strip(".,") in ("M/S", "M/S.", "MS", "MESSRS"):
+            continue  # "M/S" is a prefix, not part of the company name
+        m = re.search(r"[A-Za-z0-9]", word)
+        if m:
+            letters.append(m.group(0).upper())
+    return "".join(letters) or "TEMP"
+
+
+def _next_report_no(company_id=None):
+    """GHSEA/<year>/<company code or TEMP>/<n>. n = highest existing number
+    for that prefix + 1. Counted across ALL form types because
+    InspectionReport.report_no is unique table-wide."""
+    company = Company.query.get(company_id) if company_id else None
+    prefix = f"GHSEA/{date.today().year}/{_company_code(company.name if company else '')}/"
+    highest = 0
+    rows = InspectionReport.query.filter(InspectionReport.report_no.like(prefix + "%")).all()
+    for r in rows:
+        tail = r.report_no[len(prefix):]
+        if tail.isdigit():
+            highest = max(highest, int(tail))
+    return f"{prefix}{highest + 1}"
+
+
+def _suggest_report_no(form_type=None, company_id=None):
+    return _next_report_no(company_id)
+
+
+@inspections_bp.route("/next-report-no/<any(form9, form10, form11, psv, centrifuge):form_type>")
+@login_required
+def next_report_no(form_type):
+    from flask import jsonify
+    return jsonify({"next_no": _next_report_no(request.args.get("company_id", type=int))})
+
+
+@inspections_bp.route("/renumber-old-reports")
+@login_required
+def renumber_old_reports():
+    """One-time: converts old numbers (FORM11/2026/0001 ...) to the GHSEA format.
+    Open /inspections/renumber-old-reports to preview, add ?apply=1 to save."""
+    if not current_user.is_admin:
+        return "Admin only", 403
+    apply = request.args.get("apply") == "1"
+
+    highest = {}
+    for r in InspectionReport.query.filter(InspectionReport.report_no.like("GHSEA/%")).all():
+        prefix, _, tail = r.report_no.rpartition("/")
+        if tail.isdigit():
+            highest[prefix + "/"] = max(highest.get(prefix + "/", 0), int(tail))
+
+    old = (InspectionReport.query
+           .filter(~InspectionReport.report_no.like("GHSEA/%"))
+           .order_by(InspectionReport.report_date.asc(), InspectionReport.id.asc())
+           .all())
+
+    lines = []
+    for r in old:
+        company = Company.query.get(r.company_id) if r.company_id else None
+        year = r.report_date.year if r.report_date else (r.created_at.year if r.created_at else date.today().year)
+        prefix = f"GHSEA/{year}/{_company_code(company.name if company else '')}/"
+        highest[prefix] = highest.get(prefix, 0) + 1
+        new_no = f"{prefix}{highest[prefix]}"
+        lines.append(f"[{r.form_type}] {r.report_no}  ->  {new_no}")
+        if apply:
+            r.report_no = new_no
+
+    if apply:
+        db.session.commit()
+        lines.append(f"\nDone. {len(old)} report(s) renumbered.")
+    else:
+        lines.append(f"\nPreview only. Add ?apply=1 to the URL to save {len(old)} change(s).")
+    return make_response("\n".join(lines), 200, {"Content-Type": "text/plain; charset=utf-8"})
 
 
 @inspections_bp.route("/<any(form10, form11, psv, centrifuge):form_type>/")
@@ -743,12 +1012,14 @@ def _generic_save(form_type, report):
     config = FORMS_CONFIG[form_type]
     fields = _fields_for(form_type)
     finding_fields = set(config["finding_fields"])
+    labels = {key: label for key, label, _t, _d in fields}
+    posted = None            # set when validation fails, so the form is re-shown with what was typed
 
     if request.method == "POST":
         report_no = request.form.get("report_no", "").strip()
+        errors = []
         if not report_no:
-            flash("Report No. is required.", "danger")
-            return redirect(request.url)
+            errors.append("Report No.")
 
         existing = InspectionReport.query.filter(
             InspectionReport.report_no == report_no,
@@ -756,9 +1027,9 @@ def _generic_save(form_type, report):
         )
         if report:
             existing = existing.filter(InspectionReport.id != report.id)
-        if existing.first():
+        if report_no and existing.first():
             flash(f"A {config['label']} report with this Report No. already exists.", "danger")
-            return redirect(request.url)
+            errors.append("unique Report No.")
 
         data = {}
         for key, _label, _input_type, default in fields:
@@ -766,40 +1037,64 @@ def _generic_save(form_type, report):
             if not value and key in finding_fields:
                 value = "Satisfactory"
             if not value and default:
-                value = default
+                value = _resolve_default(default)
             data[key] = value
-        _fill_exam_dates(data)
-        if report is not None and (report.data or {}).get("reminder_sent_on") \
-                and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
-            data["reminder_sent_on"] = report.data["reminder_sent_on"]
+        if config.get("custom_fields_section"):
+            data["custom_fields"] = _parse_custom_fields(request.form.get("custom_fields"))
 
-        # occupier_name / address are common to every form, entered once at
-        # the top of the generic form template (same as Form 9), not part
-        # of FORMS_CONFIG's per-form field list.
+        # "Date" selectors: the date/comment boxes only mean something when
+        # "Date" is chosen -- drop stale values otherwise.
+        for key in (config.get("exam_types") or {}):
+            if data.get(key) != "Date":
+                data[f"{key}_date"] = ""
+                if key != "last_hydraulic_exam":     # hydraulic comment doubles as item 9(c) text
+                    data[f"{key}_comment"] = ""
+
+        _fill_exam_dates(data, form_type)
+        data["show_sign_stamp"] = request.form.get("show_sign_stamp") == "1"
+
+        # Required-field check (after auto-fill, so calculated dates count).
+        missing = [labels.get(k, k) for k in config.get("required", []) if not data.get(k)]
+        if missing:
+            flash("Please fill in: " + ", ".join(missing), "danger")
+            errors.extend(missing)
+
         data["occupier_name"] = request.form.get("occupier_name", "").strip()
         data["address"] = request.form.get("address", "").strip()
 
-        if report is None:
-            report = InspectionReport(form_type=form_type, created_by_id=current_user.id)
-            db.session.add(report)
+        if not errors:
+            if report is not None and (report.data or {}).get("reminder_sent_on") \
+                    and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
+                data["reminder_sent_on"] = report.data["reminder_sent_on"]
 
-        company_id = request.form.get("company_id", type=int)
-        report.company_id = company_id or None
-        report.report_no = report_no
-        report.report_date = _parse_date(request.form.get("date")) or date.today()
-        report.occupier_name = data.get("occupier_name")
-        report.data = data
-        db.session.commit()
+            if report is None:
+                report = InspectionReport(form_type=form_type, created_by_id=current_user.id)
+                db.session.add(report)
 
-        flash(f"{config['label']} report saved.", "success")
-        return redirect(url_for("inspections.generic_list", form_type=form_type))
+            company_id = request.form.get("company_id", type=int)
+            report.company_id = company_id or None
+            report.report_no = report_no
+            report.report_date = _parse_date(request.form.get("date")) or date.today()
+            report.occupier_name = data.get("occupier_name")
+            report.data = data
+            _remember_company_details(report.company_id, data)
+            db.session.commit()
 
+            flash(f"{config['label']} report saved.", "success")
+            return redirect(url_for("inspections.generic_list", form_type=form_type))
+
+        posted = {"report_no": report_no, "date": request.form.get("date", ""),
+                  "company_id": request.form.get("company_id", type=int), "data": data}
+
+    shown_data = posted["data"] if posted else (report.data if report else {})
     return render_template(
         "inspections/generic_form.html",
         form_type=form_type, config=config,
-        report=report, data=(report.data if report else {}),
+        report=report, data=shown_data, posted=posted,
         today=date.today().isoformat(),
-        suggested_report_no=(report.report_no if report else _suggest_report_no(form_type)),
+        suggested_report_no=(posted["report_no"] if posted else
+                             (report.report_no if report else _suggest_report_no(form_type))),
+        field_defaults={key: (_resolve_default(default) or "") for key, _l, _t, default in fields},
         companies=Company.query.order_by(Company.name.asc()).all(),
         companies_json=_companies_json(),
     )
@@ -827,7 +1122,7 @@ def generic_renew(form_type, report_id):
     new_report = InspectionReport(
         form_type=form_type,
         created_by_id=current_user.id,
-        report_no=_suggest_report_no(form_type),
+        report_no=_next_report_no(original.company_id),
         report_date=date.today(),
         occupier_name=original.occupier_name,
         company_id=original.company_id,
@@ -847,9 +1142,11 @@ def generic_pdf(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
     config = FORMS_CONFIG[form_type]
 
+    signature_uri, stamp_uri = _sign_stamp_uris()
     html = render_template(
         "inspections/generic_pdf.html",
         report=report, data=report.data, config=config, form_type=form_type,
+        signature_uri=signature_uri, stamp_uri=stamp_uri,
     )
     profile = CompanyProfile.query.first()
     header_html, footer_html = _pdf_header_footer_html(profile)
@@ -1422,7 +1719,9 @@ def generic_export_pdf(form_type):
         flash(f"No {config['label']} reports match the current search to export.", "danger")
         return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
 
-    html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type)
+    signature_uri, stamp_uri = _sign_stamp_uris()
+    html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type,
+                           signature_uri=signature_uri, stamp_uri=stamp_uri)
     profile = CompanyProfile.query.first()
     header_html, footer_html = _pdf_header_footer_html(profile)
     try:

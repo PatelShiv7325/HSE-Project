@@ -1,0 +1,9 @@
+{# Signature + stamp images (uploaded on My Company), printed above the competent
+   person's name when "Include Sign & Stamp in PDF" was ticked on the form.
+   Needs signature_uri / stamp_uri from the PDF route and `data` from the report. #}
+{% if data.show_sign_stamp and (signature_uri or stamp_uri) %}
+<div style="height:62px; text-align:center; position:relative; margin-bottom:2px;">
+  {% if signature_uri %}<img src="{{ signature_uri }}" alt="" style="height:44px; max-width:45%; vertical-align:bottom; object-fit:contain;">{% endif %}
+  {% if stamp_uri %}<img src="{{ stamp_uri }}" alt="" style="height:60px; max-width:45%; vertical-align:bottom; object-fit:contain; margin-left:6px;">{% endif %}
+</div>
+{% endif %}

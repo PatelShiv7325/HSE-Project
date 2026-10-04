@@ -1,0 +1,70 @@
+{# Auto-saves a NEW report's typed values in this browser (localStorage) while
+   you work, so a refresh / closed tab doesn't lose them. Offers to restore on
+   the next visit. Cleared on submit. Never used when editing a saved report.
+   Needs: form_type, report (None for a new report). Include inside the content block. #}
+{% if not report %}
+<div id="draftBar" style="display:none; margin:0 0 14px; padding:8px 12px; background:#fff8e1; border:1px solid #f0d98a; border-radius:6px; font-size:13px;">
+  &#128221; A draft from your last visit was restored.
+  <button type="button" class="btn btn-outline" style="padding:2px 10px; margin-left:8px;" onclick="draftClear(true)">Clear draft</button>
+</div>
+<script>
+(function () {
+  var KEY = 'hse_draft_{{ form_type }}';
+  var form = document.querySelector('form[method="post"]');
+  if (!form) return;
+  var SKIP = ['csrf_token', 'report_no'];            // report no. is always re-generated
+  var timer = null, submitting = false;
+
+  function fields() { return Array.prototype.slice.call(form.querySelectorAll('input[name], select[name], textarea[name]')); }
+
+  function save() {
+    if (submitting) return;
+    var out = {};
+    fields().forEach(function (el) {
+      if (SKIP.indexOf(el.name) !== -1) return;
+      out[el.name] = (el.type === 'checkbox') ? (el.checked ? '1' : '') : el.value;
+    });
+    out.__company_search = (document.getElementById('company_search') || {}).value || '';
+    try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) {}
+  }
+
+  function restore() {
+    var raw; try { raw = localStorage.getItem(KEY); } catch (e) { return; }
+    if (!raw) return;
+    var d; try { d = JSON.parse(raw); } catch (e) { return; }
+    var any = false;
+    fields().forEach(function (el) {
+      if (SKIP.indexOf(el.name) !== -1 || !(el.name in d)) return;
+      if (el.type === 'checkbox') { el.checked = d[el.name] === '1'; any = true; return; }
+      if (d[el.name] === '' ) return;                   // keep server defaults for blanks
+      if (el.tagName === 'SELECT' && !Array.prototype.some.call(el.options, function (o) { return o.value === d[el.name]; })) {
+        el.add(new Option(d[el.name], d[el.name]));
+      }
+      el.value = d[el.name]; any = true;
+    });
+    var cs = document.getElementById('company_search');
+    if (cs && d.__company_search) cs.value = d.__company_search;
+    if (any) {
+      document.getElementById('draftBar').style.display = 'block';
+      if (typeof examTypesRefresh === 'function') examTypesRefresh();
+      if (window.cfSetFields && d.custom_fields) {
+        try { window.cfSetFields(JSON.parse(d.custom_fields)); } catch (e) {}
+      }
+      document.dispatchEvent(new Event('company-selected'));
+    }
+  }
+
+  window.draftClear = function (reload) {
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    if (reload) { submitting = true; window.location.reload(); }
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    restore();
+    form.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(save, 400); });
+    form.addEventListener('change', function () { clearTimeout(timer); timer = setTimeout(save, 400); });
+    form.addEventListener('submit', function () { submitting = true; draftClear(false); });
+  });
+})();
+</script>
+{% endif %}

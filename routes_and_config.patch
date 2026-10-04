@@ -1,0 +1,303 @@
+diff --git a/app/inspections/routes.py b/app/inspections/routes.py
+index 2e1577f..fa39786 100644
+--- a/app/inspections/routes.py
++++ b/app/inspections/routes.py
+@@ -245,9 +245,15 @@ def _add_months(d, months):
+     return d.replace(year=year, month=month, day=min(d.day, calendar.monthrange(year, month)[1]))
+ 
+ 
+-def _fill_exam_dates(data):
+-    """Server-side safety net: if Certification Date is set but Next Exam Due /
+-    Reminder Date were left blank, fill them (+6 months -1 day, and 1 month before that)."""
++def _fill_exam_dates(data, form_type=None):
++    """Server-side safety net for the dates the browser normally auto-fills.
++    Only fills values that were left blank -- never overwrites what the user typed.
++
++      Next Exam / Next NDT Due = Certification Date + 6 months - 1 day
++      Next Hydro Due (Form 11) = Hydraulic exam date (or Certification Date) + 2 years - 1 day
++      Reminder Date            = Next Exam / NDT Due - 1 month
++    """
++    from datetime import timedelta
+     cert = data.get("certification_date")
+     if not cert:
+         return
+@@ -255,15 +261,49 @@ def _fill_exam_dates(data):
+         cert_d = _parse_date(cert)
+     except (ValueError, TypeError):
+         return
+-    from datetime import timedelta
+-    # Next Exam Due = Certification + 6 months - 1 day; Reminder = Next Exam - 1 month
+     due_d = _add_months(cert_d, 6) - timedelta(days=1)
+     if not data.get("next_exam_date"):
+         data["next_exam_date"] = due_d.isoformat()
++    if form_type == "form11":
++        if not data.get("next_ndt_date"):
++            data["next_ndt_date"] = due_d.isoformat()
++        if not data.get("next_hydro_date"):
++            base = cert_d
++            if data.get("last_hydraulic_exam") == "Date" and data.get("last_hydraulic_exam_date"):
++                try:
++                    base = _parse_date(data["last_hydraulic_exam_date"])
++                except (ValueError, TypeError):
++                    base = cert_d
++            data["next_hydro_date"] = (_add_months(base, 24) - timedelta(days=1)).isoformat()
+     if not data.get("reminder_date"):
+         data["reminder_date"] = _add_months(due_d, -1).isoformat()
+ 
+ 
++def _profile_image_uri(filename):
++    """Signature / stamp uploaded on the My Company page, as a base64 data: URI
++    (the PDF renders in a separate process, so /static URLs would not resolve)."""
++    import base64
++    import mimetypes
++    import os
++    if not filename:
++        return ""
++    path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
++                        "static", "uploads", "company", filename)
++    if not os.path.isfile(path):
++        return ""
++    mime = mimetypes.guess_type(path)[0] or "image/png"
++    with open(path, "rb") as f:
++        return f"data:{mime};base64," + base64.b64encode(f.read()).decode("ascii")
++
++
++def _sign_stamp_uris():
++    profile = CompanyProfile.query.first()
++    if not profile:
++        return "", ""
++    return (_profile_image_uri(profile.signature_filename),
++            _profile_image_uri(profile.stamp_filename))
++
++
+ # ---------------------------------------------------------------------------
+ # "Copy Previous Form Data" -- JSON search used by the modal on every
+ # inspection form (Form 9, 10, 11, PSV, Centrifuge). Returns recent past
+@@ -469,6 +509,9 @@ FORMS_CONFIG = {
+         "rule": "(Prescribed under Rule 60)",
+         # "Manage Custom Fields" button is shown right after this section
+         "custom_fields_section": "3) Equipment Identification",
++        "required": ["certification_date", "next_exam_date", "reminder_date",
++                     "competent_person_name", "competent_person_no"],
++        "auto_dates": True,
+         "options": {
+             "heat_treatment_details": ["Not applicable"],
+         },
+@@ -526,11 +569,29 @@ FORMS_CONFIG = {
+         "label": "Form 11 - Pressure Vessel",
+         "rule": "(Prescribed under Rule 61 of GFR 1963)",
+         "custom_fields_section": "3) Vessel Details",
++        # Unit labels shown inside the input boxes (key -> unit text).
++        "units": {
++            "capacity": "KL", "temperature": "\u00b0C", "pressure": "kg/cm\u00b2",
++            "safe_working_pressure": "KG/CM\u00b2", "recommended_swp": "KG/CM\u00b2",
++            "reduced_working_pressure": "KG/CM\u00b2", "calculated_swp": "KG/CM\u00b2",
++            "thickness_shell": "mm", "thickness_jacket": "mm", "thickness_limpet": "mm",
++            "thickness_pipeline": "mm", "ultrasonic_shell": "mm", "ultrasonic_jacket": "mm",
++            "ultrasonic_limpet": "mm", "ultrasonic_pipeline": "mm",
++        },
++        # "Last ... exam" selectors: First Time / By Manufacturer / Date.
++        # Choosing "Date" reveals <key>_date and <key>_comment (hidden otherwise).
++        "exam_types": {
++            "last_external_exam": "7a) Last external examination",
++            "last_hydraulic_exam": "7c) Last hydraulic examination",
++            "last_ultrasonic_test": "7d) Last ultrasonic / NDT",
++        },
++        # Must be filled before saving (checked in the browser AND on the server).
++        "required": ["certification_date", "next_ndt_date", "next_hydro_date",
++                     "reminder_date", "competent_person_name", "competent_person_no"],
++        # Date fields that are auto-calculated from the Certification Date.
++        "auto_dates": True,
+         "options": {
+-            "last_external_exam": ["First Time", "By Manufacturer"],
+             "last_internal_exam": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+-            "last_hydraulic_exam": ["First Time", "By Manufacturer"],
+-            "last_ultrasonic_test": ["First Time", "By Manufacturer"],
+             "lagging_removed": ["Lagging provided", "Lagging Partial Removed", "Not Applicable"],
+             "vessel_condition": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+             "piping_condition": ["Satisfactory", "Good", "Not Applicable", "Nil"],
+@@ -577,6 +638,8 @@ FORMS_CONFIG = {
+                 ("first_use_date", "First Use Date", "date", None),
+                 ("last_exam_date", "Last Exam Date", "date", None),
+                 ("last_external_exam", "Last External Exam", "text", None),
++                ("last_external_exam_date", "Last External Exam Date", "date", None),
++                ("last_external_exam_comment", "Last External Exam Comment", "text", None),
+                 ("last_internal_exam", "Last Internal Exam", "text", "Not Applicable"),
+                 ("last_hydraulic_exam", "Last Hydraulic Exam", "text", None),
+                 ("last_hydraulic_exam_date", "Last Hydraulic Exam Date", "date", None),
+@@ -657,6 +720,9 @@ FORMS_CONFIG = {
+     "psv": {
+         "label": "PSV - Pressure Safety Valve Certificate",
+         "rule": "Pressure Safety Valve Test Certificate",
++        "units": {"set_pressure": "kg/cm\u00b2", "temperature": "\u00b0C", "humidity": "%",
++                  "operated_at": "kg/cm\u00b2"},
++        "required": ["next_exam_date", "reminder_date", "competent_person_name", "competent_person_no"],
+         "options": {},
+         "sections": [
+             ("3) Fitted Location", [
+@@ -712,6 +778,10 @@ FORMS_CONFIG = {
+         "label": "Centrifuge Machine Test Report",
+         "rule": "Centrifuge Machine Test Report",
+         "custom_fields_section": "3) Machine Identity",
++        "units": {"basket_speed": "RPM", "operating_speed_stamped": "RPM"},
++        "required": ["certification_date", "next_exam_date", "reminder_date",
++                     "competent_person_name", "competent_person_no"],
++        "auto_dates": True,
+         "options": {
+             "condition_of_machine": ["Satisfactory", "Not Applicable"],
+             "interlock_top_cover": ["Satisfactory", "Not Applicable"],
+@@ -942,12 +1012,14 @@ def _generic_save(form_type, report):
+     config = FORMS_CONFIG[form_type]
+     fields = _fields_for(form_type)
+     finding_fields = set(config["finding_fields"])
++    labels = {key: label for key, label, _t, _d in fields}
++    posted = None            # set when validation fails, so the form is re-shown with what was typed
+ 
+     if request.method == "POST":
+         report_no = request.form.get("report_no", "").strip()
++        errors = []
+         if not report_no:
+-            flash("Report No. is required.", "danger")
+-            return redirect(request.url)
++            errors.append("Report No.")
+ 
+         existing = InspectionReport.query.filter(
+             InspectionReport.report_no == report_no,
+@@ -955,9 +1027,9 @@ def _generic_save(form_type, report):
+         )
+         if report:
+             existing = existing.filter(InspectionReport.id != report.id)
+-        if existing.first():
++        if report_no and existing.first():
+             flash(f"A {config['label']} report with this Report No. already exists.", "danger")
+-            return redirect(request.url)
++            errors.append("unique Report No.")
+ 
+         data = {}
+         for key, _label, _input_type, default in fields:
+@@ -969,39 +1041,59 @@ def _generic_save(form_type, report):
+             data[key] = value
+         if config.get("custom_fields_section"):
+             data["custom_fields"] = _parse_custom_fields(request.form.get("custom_fields"))
+-        _fill_exam_dates(data)
+-        if report is not None and (report.data or {}).get("reminder_sent_on") \
+-                and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
+-            data["reminder_sent_on"] = report.data["reminder_sent_on"]
+ 
+-        # occupier_name / address are common to every form, entered once at
+-        # the top of the generic form template (same as Form 9), not part
+-        # of FORMS_CONFIG's per-form field list.
++        # "Date" selectors: the date/comment boxes only mean something when
++        # "Date" is chosen -- drop stale values otherwise.
++        for key in (config.get("exam_types") or {}):
++            if data.get(key) != "Date":
++                data[f"{key}_date"] = ""
++                if key != "last_hydraulic_exam":     # hydraulic comment doubles as item 9(c) text
++                    data[f"{key}_comment"] = ""
++
++        _fill_exam_dates(data, form_type)
++        data["show_sign_stamp"] = request.form.get("show_sign_stamp") == "1"
++
++        # Required-field check (after auto-fill, so calculated dates count).
++        missing = [labels.get(k, k) for k in config.get("required", []) if not data.get(k)]
++        if missing:
++            flash("Please fill in: " + ", ".join(missing), "danger")
++            errors.extend(missing)
++
+         data["occupier_name"] = request.form.get("occupier_name", "").strip()
+         data["address"] = request.form.get("address", "").strip()
+ 
+-        if report is None:
+-            report = InspectionReport(form_type=form_type, created_by_id=current_user.id)
+-            db.session.add(report)
++        if not errors:
++            if report is not None and (report.data or {}).get("reminder_sent_on") \
++                    and (report.data or {}).get("reminder_date") == data.get("reminder_date"):
++                data["reminder_sent_on"] = report.data["reminder_sent_on"]
+ 
+-        company_id = request.form.get("company_id", type=int)
+-        report.company_id = company_id or None
+-        report.report_no = report_no
+-        report.report_date = _parse_date(request.form.get("date")) or date.today()
+-        report.occupier_name = data.get("occupier_name")
+-        report.data = data
+-        _remember_company_details(report.company_id, data)
+-        db.session.commit()
++            if report is None:
++                report = InspectionReport(form_type=form_type, created_by_id=current_user.id)
++                db.session.add(report)
+ 
+-        flash(f"{config['label']} report saved.", "success")
+-        return redirect(url_for("inspections.generic_list", form_type=form_type))
++            company_id = request.form.get("company_id", type=int)
++            report.company_id = company_id or None
++            report.report_no = report_no
++            report.report_date = _parse_date(request.form.get("date")) or date.today()
++            report.occupier_name = data.get("occupier_name")
++            report.data = data
++            _remember_company_details(report.company_id, data)
++            db.session.commit()
++
++            flash(f"{config['label']} report saved.", "success")
++            return redirect(url_for("inspections.generic_list", form_type=form_type))
++
++        posted = {"report_no": report_no, "date": request.form.get("date", ""),
++                  "company_id": request.form.get("company_id", type=int), "data": data}
+ 
++    shown_data = posted["data"] if posted else (report.data if report else {})
+     return render_template(
+         "inspections/generic_form.html",
+         form_type=form_type, config=config,
+-        report=report, data=(report.data if report else {}),
++        report=report, data=shown_data, posted=posted,
+         today=date.today().isoformat(),
+-        suggested_report_no=(report.report_no if report else _suggest_report_no(form_type)),
++        suggested_report_no=(posted["report_no"] if posted else
++                             (report.report_no if report else _suggest_report_no(form_type))),
+         field_defaults={key: (_resolve_default(default) or "") for key, _l, _t, default in fields},
+         companies=Company.query.order_by(Company.name.asc()).all(),
+         companies_json=_companies_json(),
+@@ -1050,9 +1142,11 @@ def generic_pdf(form_type, report_id):
+     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
+     config = FORMS_CONFIG[form_type]
+ 
++    signature_uri, stamp_uri = _sign_stamp_uris()
+     html = render_template(
+         "inspections/generic_pdf.html",
+         report=report, data=report.data, config=config, form_type=form_type,
++        signature_uri=signature_uri, stamp_uri=stamp_uri,
+     )
+     profile = CompanyProfile.query.first()
+     header_html, footer_html = _pdf_header_footer_html(profile)
+@@ -1625,7 +1719,9 @@ def generic_export_pdf(form_type):
+         flash(f"No {config['label']} reports match the current search to export.", "danger")
+         return redirect(url_for("inspections.generic_list", form_type=form_type, q=search))
+ 
+-    html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type)
++    signature_uri, stamp_uri = _sign_stamp_uris()
++    html = render_template("inspections/generic_bulk_pdf.html", reports=reports, config=config, form_type=form_type,
++                           signature_uri=signature_uri, stamp_uri=stamp_uri)
+     profile = CompanyProfile.query.first()
+     header_html, footer_html = _pdf_header_footer_html(profile)
+     try:
+diff --git a/config.py b/config.py
+index 54aa013..6b14968 100644
+--- a/config.py
++++ b/config.py
+@@ -1,9 +1,16 @@
+ import os
++import warnings
+ basedir = os.path.abspath(os.path.dirname(__file__))
+ 
+ 
+ class Config:
++    # Set SECRET_KEY as an environment variable on Render (Environment tab) --
++    # any long random string, e.g.  python -c "import secrets; print(secrets.token_hex(32))"
++    # Using the fallback below in production would let anyone forge login sessions.
+     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
++    if not os.environ.get('SECRET_KEY') and (os.environ.get('RENDER') or os.environ.get('DATABASE_URL')):
++        warnings.warn("SECRET_KEY is not set -- running with the INSECURE development key. "
++                      "Set the SECRET_KEY environment variable in production.", RuntimeWarning)
+     _db_url = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'hse.db')
+     # Render (and some other hosts) hand out "postgres://" but SQLAlchemy 1.4+ requires "postgresql://"
+     if _db_url.startswith('postgres://'):

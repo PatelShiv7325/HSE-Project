@@ -2,6 +2,13 @@
 {% block breadcrumb_parent %}Inspections{% endblock %}
 {% block breadcrumb_title %}{{ 'Edit' if report else 'New' }} {{ config.label }}{% endblock %}
 {% block content %}
+<style>
+  .unit-box { position:relative; }
+  .unit-box input { padding-right:62px; width:100%; box-sizing:border-box; }
+  .unit-tag { position:absolute; right:1px; top:1px; bottom:1px; display:flex; align-items:center; padding:0 10px;
+              background:#eef1f5; color:#44546a; font-size:12px; font-weight:600; border-left:1px solid #d5dbe3;
+              border-radius:0 4px 4px 0; pointer-events:none; }
+</style>
 <div class="card">
   <div class="toolbar">
     <h4 style="margin:0;">{{ 'Edit' if report else 'New' }} {{ config.label }}</h4>
@@ -11,6 +18,7 @@
     </div>
   </div>
 
+  {% include "inspections/_draft_autosave.html" %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -27,22 +35,23 @@
             <option value="{{ c.name }}">
           {% endfor %}
         </datalist>
-        <input type="hidden" id="company_id" name="company_id" value="{{ report.company_id if report and report.company_id else '' }}">
+        <input type="hidden" id="company_id" name="company_id" value="{{ posted.company_id if posted and posted.company_id else (report.company_id if report and report.company_id else '') }}">
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Report No. *</label>
-        <input type="text" name="report_no" required value="{{ report.report_no if report else suggested_report_no }}">
+        <input type="text" name="report_no" required value="{{ suggested_report_no }}">
+        {% include "inspections/_report_no_editor.html" %}
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Date *</label>
-        <input type="date" name="date" required value="{{ report.report_date.isoformat() if report and report.report_date else today }}">
+        <input type="date" name="date" required value="{{ posted.date if posted and posted.date else (report.report_date.isoformat() if report and report.report_date else today) }}">
       </div>
       <div>
-        <label style="display:block; margin-bottom:3px;">Occupier Name</label>
+        <label style="display:block; margin-bottom:3px;">1) Occupier Name</label>
         <input type="text" id="occupier_name" name="occupier_name" value="{{ data.occupier_name or '' }}">
       </div>
       <div style="grid-column:span 2;">
-        <label style="display:block; margin-bottom:3px;">Address</label>
+        <label style="display:block; margin-bottom:3px;">2) Address</label>
         <input type="text" id="address" name="address" value="{{ data.address or '' }}">
       </div>
     </div>
@@ -50,26 +59,70 @@
     {% for section_name, section_fields in config.sections %}
     <h4>{{ section_name }}</h4>
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+      {% set exam_keys = (config.exam_types or {}).keys()|list %}
       {% for key, label, input_type, default in section_fields %}
-      <div {% if input_type == 'textarea' %}style="grid-column:span 2;"{% endif %}>
-        <label style="display:block; margin-bottom:3px;">{{ label }}</label>
-        {% if input_type == 'textarea' %}
-          <textarea name="{{ key }}" rows="2">{{ data.get(key, default or '') }}</textarea>
+      {% set is_exam_extra = (key.endswith('_date') and key[:-5] in exam_keys) or (key.endswith('_comment') and key[:-8] in exam_keys) %}
+      {% if not is_exam_extra %}
+      {% set val = data.get(key, field_defaults.get(key, '')) %}
+      {% set opts = (config.options or {}).get(key) %}
+      {% set unit = (config.units or {}).get(key) %}
+      {% set req = key in (config.required or []) %}
+      <div {% if input_type == 'textarea' or section_fields|length == 1 or key in exam_keys %}style="grid-column:1 / -1;"{% endif %}>
+        <label style="display:block; margin-bottom:3px;">{{ label }}{% if req %} <span style="color:#c0392b;">*</span>{% endif %}</label>
+        {% if key in exam_keys %}
+          {# First Time / By Manufacturer / Date -- Date reveals a date box + a comment box #}
+          {% set builtin = ['First Time', 'By Manufacturer', 'Date'] %}
+          <select name="{{ key }}" class="exam-type" data-exam="{{ key }}">
+            <option value="">-- Select --</option>
+            {% for o in builtin %}<option value="{{ o }}" {{ 'selected' if val == o }}>{{ o }}</option>{% endfor %}
+            {% if val and val not in builtin %}<option value="{{ val }}" selected>{{ val }}</option>{% endif %}
+          </select>
+          <div class="exam-extra" data-exam-extra="{{ key }}" style="display:none; margin-top:8px; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
+            <div>
+              <span style="font-size:11px; color:#777; text-transform:uppercase;">Exam Date</span>
+              <input type="date" name="{{ key }}_date" value="{{ data.get(key ~ '_date', '') }}">
+            </div>
+            <div>
+              <span style="font-size:11px; color:#777; text-transform:uppercase;">Findings / Comment</span>
+              <input type="text" name="{{ key }}_comment" value="{{ data.get(key ~ '_comment', '') }}" placeholder="e.g. Tested at 15.0 kg/cm&sup2; for 30 mins">
+            </div>
+          </div>
+        {% elif input_type == 'textarea' %}
+          <textarea name="{{ key }}" rows="3">{{ val }}</textarea>
         {% elif input_type == 'date' %}
-          <input type="date" name="{{ key }}" value="{{ data.get(key, default or '') }}">
+          <input type="date" name="{{ key }}" value="{{ val }}" {{ 'required' if req }}>
         {% else %}
-          <input type="text" name="{{ key }}" value="{{ data.get(key, default or '') }}">
+          {% if unit %}<div class="unit-box">{% endif %}
+          <input type="text" name="{{ key }}" value="{{ val|dmy if key == 'date_of_construction' else val }}" {{ 'required' if req }}
+                 {% if opts %}list="opts_{{ key }}" autocomplete="off" placeholder="Select or type..."{% elif key == 'date_of_construction' %}placeholder="e.g. 2022"{% elif unit %}placeholder="e.g. 10"{% endif %}>
+          {% if unit %}<span class="unit-tag">{{ unit }}</span></div>{% endif %}
+          {% if opts %}
+          <datalist id="opts_{{ key }}">
+            {% for o in opts %}<option value="{{ o }}">{% endfor %}
+          </datalist>
+          {% endif %}
         {% endif %}
       </div>
+      {% endif %}
       {% endfor %}
     </div>
+    {% if config.custom_fields_section and section_name == config.custom_fields_section %}
+      {% set cf_section_label = section_name %}
+      {% include "inspections/_custom_fields.html" %}
+    {% endif %}
     {% endfor %}
+
+    <label style="display:flex; align-items:center; gap:8px; margin:6px 0 18px; cursor:pointer;">
+      <input type="checkbox" name="show_sign_stamp" value="1" {{ 'checked' if data.get('show_sign_stamp') }}>
+      <span>Include Signature &amp; Stamp in PDF <small style="color:#777;">(images are uploaded under My Company)</small></span>
+    </label>
 
     <button class="btn btn-primary" type="submit">{{ 'Save Changes' if report else 'Create Report' }}</button>
     <a class="btn btn-outline" href="{{ url_for('inspections.generic_list', form_type=form_type) }}">Cancel</a>
   </form>
 </div>
 {% include "inspections/_copy_previous.html" %}
+{% include "inspections/_report_no_auto.html" %}
 {% endblock %}
 
 {% block scripts %}
@@ -98,22 +151,23 @@
     var map = {
       occupier_name: match.occupier_name,
       address: match.address,
+      reg_no: match.reg_no,
+      license_no: match.license_no,
     };
     Object.keys(map).forEach(function (fieldId) {
-      var el = document.getElementById(fieldId);
+      var el = document.getElementById(fieldId) || document.querySelector('form[method="post"] [name="' + fieldId + '"]');
       if (el && !el.value && map[fieldId]) {
         el.value = map[fieldId];
       }
     });
   }
 
-  // ---- Auto-fill from the Certification Date:
-  //   Next Examination Due = Certification Date + 6 months - 1 day
-  //   Reminder Date        = Next Examination Due - 1 month
-  //   e.g. 01/01/2026  ->  Next Exam 30/06/2026, Reminder 30/05/2026
-  // Both stay editable. Recalculated whenever a COMPLETE, valid Certification
-  // Date is entered/picked; half-typed dates (year "0202" while typing 2028)
-  // are ignored.
+  // ---- Date automation ---------------------------------------------------
+  //   Certification Date  = Report Date (when the report date is changed)
+  //   Next Exam / NDT Due = Certification Date + 6 months - 1 day
+  //   Next Hydro Due      = Hydraulic exam date (or Certification Date) + 2 years - 1 day   [Form 11]
+  //   Reminder Date       = Next Exam / NDT Due - 1 month
+  // All stay editable. Half-typed dates (year "0202" while typing 2028) are ignored.
   function addMonthsISO(iso, months) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
     if (!m) return '';
@@ -133,29 +187,66 @@
     return dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0') + '-' + String(dt.getUTCDate()).padStart(2, '0');
   }
 
+  function F(name) { return document.querySelector('form[method="post"] [name="' + name + '"]'); }
+  function setVal(el, v) {
+    if (!el || !v) return;
+    el.value = v;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   function autoFillExamDates(force) {
-    var cert = document.querySelector('input[name="certification_date"]');
-    var next = document.querySelector('input[name="next_exam_date"]');
-    var rem  = document.querySelector('input[name="reminder_date"]');
-    if (!cert || !next || !rem) return;
+    var cert = F('certification_date');
+    if (!cert) return;
     var sixMonths = addMonthsISO(cert.value, 6);
     if (!sixMonths) return;                            // incomplete / invalid date
-    var nextVal = addDaysISO(sixMonths, -1);           // one day before
-    var remVal  = addMonthsISO(nextVal, -1);           // one month before due date
-    if (!nextVal || !remVal) return;
-    if (force || !next.value) next.value = nextVal;
-    if (force || !rem.value)  rem.value  = remVal;
-    next.dispatchEvent(new Event('change', { bubbles: true }));
-    rem.dispatchEvent(new Event('change', { bubbles: true }));
+    var dueVal = addDaysISO(sixMonths, -1);            // one day before
+    var remVal = addMonthsISO(dueVal, -1);             // one month before the due date
+    var targets = [['next_exam_date', dueVal], ['next_ndt_date', dueVal], ['reminder_date', remVal]];
+
+    var hydro = F('next_hydro_date');
+    if (hydro) {
+      var base = cert.value;
+      var type = F('last_hydraulic_exam'), hd = F('last_hydraulic_exam_date');
+      if (type && type.value === 'Date' && hd && hd.value) base = hd.value;
+      targets.push(['next_hydro_date', addDaysISO(addMonthsISO(base, 24), -1)]);
+    }
+    targets.forEach(function (t) {
+      var el = F(t[0]);
+      if (el && t[1] && (force || !el.value)) { el.value = t[1]; }
+    });
+  }
+
+  // Show the Date + Comment boxes only when an exam selector is set to "Date".
+  function examTypesRefresh() {
+    document.querySelectorAll('select.exam-type').forEach(function (sel) {
+      var box = document.querySelector('[data-exam-extra="' + sel.dataset.exam + '"]');
+      if (box) box.style.display = (sel.value === 'Date') ? 'grid' : 'none';
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    var cert = document.querySelector('input[name="certification_date"]');
-    if (!cert) return;
-    ['change', 'input', 'blur'].forEach(function (ev) {
-      cert.addEventListener(ev, function () { autoFillExamDates(true); });
+    var cert = F('certification_date');
+    if (cert) {
+      ['change', 'input', 'blur'].forEach(function (ev) {
+        cert.addEventListener(ev, function () { autoFillExamDates(true); });
+      });
+      // Report date -> Certification Date (+ everything calculated from it)
+      var rd = F('date');
+      if (rd) rd.addEventListener('change', function () {
+        if (!rd.value) return;
+        cert.value = rd.value;
+        autoFillExamDates(true);
+      });
+      autoFillExamDates(false);
+    }
+    document.querySelectorAll('select.exam-type').forEach(function (sel) {
+      sel.addEventListener('change', function () { examTypesRefresh(); autoFillExamDates(true); });
     });
-    autoFillExamDates(false);
+    ['last_hydraulic_exam_date'].forEach(function (n) {
+      var el = F(n);
+      if (el) el.addEventListener('change', function () { autoFillExamDates(true); });
+    });
+    examTypesRefresh();
   });
 </script>
 {% endblock %}

@@ -1,9 +1,16 @@
 import os
+import warnings
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
+    # Set SECRET_KEY as an environment variable on Render (Environment tab) --
+    # any long random string, e.g.  python -c "import secrets; print(secrets.token_hex(32))"
+    # Using the fallback below in production would let anyone forge login sessions.
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
+    if not os.environ.get('SECRET_KEY') and (os.environ.get('RENDER') or os.environ.get('DATABASE_URL')):
+        warnings.warn("SECRET_KEY is not set -- running with the INSECURE development key. "
+                      "Set the SECRET_KEY environment variable in production.", RuntimeWarning)
     _db_url = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'hse.db')
     # Render (and some other hosts) hand out "postgres://" but SQLAlchemy 1.4+ requires "postgresql://"
     if _db_url.startswith('postgres://'):

@@ -1,0 +1,35 @@
+{# "Edit parts" for the Report No. -- splits GHSEA/2026/ABC/12 into its pieces so one
+   piece (e.g. the serial) can be changed without retyping the rest. The result is
+   written back into the normal report_no input. Include once, inside the form. #}
+<div id="rnParts" style="display:none; margin-top:6px; gap:6px; flex-wrap:wrap; align-items:center;"></div>
+<button type="button" id="rnToggle" class="btn btn-outline" style="margin-top:6px; padding:2px 10px; font-size:12px;">&#9998; Edit parts</button>
+<script>
+(function () {
+  var rn = document.querySelector('form[method="post"] [name="report_no"]');
+  var box = document.getElementById('rnParts');
+  var btn = document.getElementById('rnToggle');
+  if (!rn || !box || !btn) return;
+
+  function build() {
+    box.innerHTML = '';
+    var parts = rn.value.split('/');
+    var names = ['Prefix', 'Year', 'Company code', 'No.'];
+    parts.forEach(function (p, i) {
+      var inp = document.createElement('input');
+      inp.type = 'text'; inp.value = p; inp.title = names[i] || ('Part ' + (i + 1));
+      inp.style.width = (i === parts.length - 1 ? '70px' : '90px');
+      inp.addEventListener('input', function () {
+        rn.value = Array.prototype.map.call(box.querySelectorAll('input'), function (x) { return x.value.trim(); }).join('/');
+        rn.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      box.appendChild(inp);
+      if (i < parts.length - 1) box.appendChild(document.createTextNode(' / '));
+    });
+  }
+  btn.addEventListener('click', function () {
+    var open = box.style.display !== 'none';
+    if (open) { box.style.display = 'none'; return; }
+    build(); box.style.display = 'flex';
+  });
+})();
+</script>

@@ -11,6 +11,8 @@
     </div>
   </div>
 
+  {% set form_type = 'form9' %}
+  {% include "inspections/_draft_autosave.html" %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -31,7 +33,8 @@
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Report No. *</label>
-        <input type="text" name="report_no" required value="{{ report.report_no if report else '' }}">
+        <input type="text" name="report_no" required value="{{ report.report_no if report else suggested_report_no }}">
+        {% include "inspections/_report_no_editor.html" %}
       </div>
       <div>
         <label style="display:block; margin-bottom:3px;">Date *</label>
@@ -190,6 +193,7 @@
   </form>
 </div>
 {% include "inspections/_copy_previous.html" %}
+{% include "inspections/_report_no_auto.html" %}
 {% endblock %}
 
 {% block scripts %}

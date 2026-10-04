@@ -5,3 +5,10 @@ app_OLD_BACKUP_2/
 .env
 hse.db
 .git_broken_backup/
+
+# local-only clutter
+backups/
+*.bak
+*.db
+.venv/
+venv/

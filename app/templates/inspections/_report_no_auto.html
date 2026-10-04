@@ -1,0 +1,37 @@
+{# app/templates/inspections/_report_no_auto.html
+   Keeps the Report No. in step with the chosen company on NEW reports:
+   GHSEA/<year>/<TEMP or company code>/<n>. Never overwrites a number the user typed.
+   Include inside {% block content %} of an inspection form. #}
+<script>
+(function () {
+  var IS_NEW = {{ 'false' if report else 'true' }};
+  var URL_BASE = "{{ url_for('inspections.next_report_no', form_type=form_type) }}";
+  if (!IS_NEW) return;
+
+  var rn = document.querySelector('form[method="post"] [name="report_no"]');
+  var hidden = document.getElementById('company_id');
+  var search = document.getElementById('company_search');
+  if (!rn) return;
+
+  var auto = rn.value;            // the number we filled in ourselves
+  var lastCompany = hidden ? hidden.value : '';
+
+  function refresh() {
+    var cid = hidden ? hidden.value : '';
+    if (cid === lastCompany) return;
+    lastCompany = cid;
+    if (rn.value !== auto && rn.value.trim() !== '') return;     // user typed their own
+    fetch(URL_BASE + (cid ? '?company_id=' + encodeURIComponent(cid) : ''),
+          { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.next_no && (rn.value === auto || rn.value.trim() === '')) {
+          rn.value = auto = d.next_no;
+        }
+      }).catch(function () {});
+  }
+
+  if (search) search.addEventListener('input', refresh);          // typing / datalist pick
+  document.addEventListener('company-selected', refresh);         // Copy Previous
+})();
+</script>
