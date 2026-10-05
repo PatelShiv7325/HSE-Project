@@ -1103,9 +1103,12 @@ FORMS_CONFIG = {
 def _resolve_default(default):
     """Static defaults pass through; the __today__ / __plus1y__ /
     __plus1y_m1__ markers are turned into ISO dates (today, today+1 year-1 day,
-    and one month before that) -- same defaults the new DISH software uses."""
-    if not default or not isinstance(default, str) or not default.startswith("__"):
+    and one month before that) -- same defaults the new DISH software uses.
+    A {date} placeholder inside a default text is filled with today's date."""
+    if not default or not isinstance(default, str):
         return default
+    if not default.startswith("__"):
+        return default.replace("{date}", date.today().strftime("%d/%m/%Y"))
     today = date.today()
     if default == "__today__":
         return today.isoformat()
