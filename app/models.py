@@ -53,6 +53,19 @@ class User(UserMixin, db.Model):
     salary = db.Column(db.Numeric(12, 2), default=0)  # monthly salary, used for productivity widgets
     from_month = db.Column(db.String(7))  # employment start month, e.g. "2026-01" -- shown as "-" if unset
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # --- profile page: contact number + profile photo (photo bytes live in the DB, so they survive Render redeploys) ---
+    contact = db.Column(db.String(20))
+    avatar_mime = db.Column(db.String(30))
+    avatar_version = db.Column(db.Integer, default=0)
+    avatar_data = db.deferred(db.Column(db.LargeBinary))   # deferred: not loaded on every request
+
+    @property
+    def avatar_url(self):
+        """URL of the profile photo, or None when the user has not uploaded one."""
+        if not self.avatar_mime:
+            return None
+        from flask import url_for
+        return url_for("auth.avatar", user_id=self.id, v=self.avatar_version or 0)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

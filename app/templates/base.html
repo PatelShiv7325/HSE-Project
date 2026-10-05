@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/css/jquery.dataTables.min.css">
   {% if current_user.is_authenticated %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endif %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=5">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=6">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -304,7 +304,41 @@
             <div class="tb-foot"><a class="btn btn-outline" href="{{ url_for('notifications.center') }}">View All Notifications</a></div>
           </div>
         </div>
-        <a class="avatar" href="{{ url_for('auth.profile') }}" title="My Profile" style="text-decoration:none;">{{ current_user.name[0]|upper }}</a>
+        {# ---- Profile (avatar) dropdown ---- #}
+        <div class="tb-wrap" id="userWrap">
+          <button type="button" class="avatar tb-btn avatar-btn" id="userBtn" title="{{ current_user.name }}"
+                  aria-label="Account menu" aria-haspopup="true" aria-expanded="false">
+            {% if current_user.avatar_url %}<img src="{{ current_user.avatar_url }}" alt="">{% else %}{{ current_user.name[0]|upper }}{% endif %}
+            <span class="avatar-dot"></span>
+          </button>
+          <div class="tb-panel user-panel" id="userPanel" role="menu" hidden>
+            <div class="user-head">
+              <span class="avatar user-head-avatar">
+                {% if current_user.avatar_url %}<img src="{{ current_user.avatar_url }}" alt="">{% else %}{{ current_user.name[0]|upper }}{% endif %}
+                <span class="avatar-dot"></span>
+              </span>
+              <div class="user-head-text">
+                <strong>{{ current_user.name }}</strong>
+                <span>{{ current_user.email }}</span>
+              </div>
+            </div>
+            <a class="user-item" role="menuitem" href="{{ url_for('auth.profile') }}">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+              My Profile
+            </a>
+            {% if current_user.is_admin %}
+            <a class="user-item" role="menuitem" href="{{ url_for('admin.config_page') }}">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              Settings
+            </a>
+            {% endif %}
+            <div class="user-sep"></div>
+            <a class="user-item" role="menuitem" href="{{ url_for('auth.logout') }}">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+              Log Out
+            </a>
+          </div>
+        </div>
       </div>
     </div>
     <div class="content">
@@ -328,7 +362,8 @@
   (function () {
     var todoWrap = document.getElementById('todoWrap');
     var bellWrap = document.getElementById('bellWrap');
-    if (!todoWrap && !bellWrap) return;                 // logged out -> nothing to do
+    var userWrap = document.getElementById('userWrap');
+    if (!todoWrap && !bellWrap && !userWrap) return;    // logged out -> nothing to do
 
     var csrfEl = document.querySelector('meta[name="csrf-token"]');
     var csrf = csrfEl ? csrfEl.getAttribute('content') : '';
@@ -360,6 +395,9 @@
     }
     document.addEventListener('click', function () { closeAll(null); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
+
+    // ---- Profile (avatar) menu: nothing to load, it just opens and closes ----
+    if (userWrap) makeDropdown(userWrap, function () {});
 
     // ---- Daily Todo Checklist ----
     if (todoWrap) {
