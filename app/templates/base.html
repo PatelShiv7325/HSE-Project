@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/css/jquery.dataTables.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=4">
+  {% if current_user.is_authenticated %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endif %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=5">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.13.8/js/jquery.dataTables.min.js"></script>
@@ -264,9 +265,45 @@
         </div>
       </div>
       <div class="icons">
-        <span class="icon-btn" title="Notifications">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        </span>
+        {# ---- Daily Todo Checklist dropdown ---- #}
+        {% set todo_n = (nav_counts.todo if nav_counts else 0) or 0 %}
+        <div class="tb-wrap" id="todoWrap" data-feed="{{ url_for('workflow.todo_feed') }}">
+          <button type="button" class="icon-btn tb-btn" id="todoBtn" title="Daily Todo Checklist"
+                  aria-label="Daily Todo Checklist" aria-haspopup="true" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>
+            <span class="tb-badge" id="todoBadge" {% if not todo_n %}hidden{% endif %}>{{ '99+' if todo_n > 99 else todo_n }}</span>
+          </button>
+          <div class="tb-panel" id="todoPanel" role="dialog" aria-label="Daily Todo Checklist" hidden>
+            <div class="tb-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v2h6V3M8 11h8M8 15h5"/></svg>
+              <strong>Daily Todo Checklist</strong>
+              <span class="tb-pill" id="todoPill">{{ todo_n }} PENDING</span>
+            </div>
+            <div class="tb-list" id="todoList"><div class="tb-empty">Loading&hellip;</div></div>
+            <div class="tb-foot"><a class="btn btn-outline" href="{{ url_for('workflow.todo') }}">View All Checklist Tasks</a></div>
+          </div>
+        </div>
+
+        {# ---- Notification bell dropdown ---- #}
+        <div class="tb-wrap" id="bellWrap"
+             data-feed="{{ url_for('notifications.feed') }}"
+             data-readall="{{ url_for('notifications.mark_all_read') }}">
+          <button type="button" class="icon-btn tb-btn" id="bellBtn" title="Notifications"
+                  aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="tb-badge red" id="bellBadge" hidden>0</span>
+          </button>
+          <div class="tb-panel" id="bellPanel" role="dialog" aria-label="Notifications" hidden>
+            <div class="tb-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <strong>Notifications</strong>
+              <span class="tb-pill" id="bellPill" hidden>0 NEW</span>
+              <button type="button" class="tb-link" id="bellMarkAll" hidden>Mark all read</button>
+            </div>
+            <div class="tb-list" id="bellList"><div class="tb-empty">Loading&hellip;</div></div>
+            <div class="tb-foot"><a class="btn btn-outline" href="{{ url_for('notifications.center') }}">View All Notifications</a></div>
+          </div>
+        </div>
         <a class="avatar" href="{{ url_for('auth.profile') }}" title="My Profile" style="text-decoration:none;">{{ current_user.name[0]|upper }}</a>
       </div>
     </div>
@@ -284,6 +321,118 @@
   {% block guest_content %}{% endblock %}
 {% endif %}
 {% block scripts %}{% endblock %}
+
+<script>
+  // Topbar dropdowns: "Daily Todo Checklist" (todo icon) and "Notifications" (bell).
+  // Each loads its JSON feed when opened; the bell also polls every 30 s for its badge.
+  (function () {
+    var todoWrap = document.getElementById('todoWrap');
+    var bellWrap = document.getElementById('bellWrap');
+    if (!todoWrap && !bellWrap) return;                 // logged out -> nothing to do
+
+    var csrfEl = document.querySelector('meta[name="csrf-token"]');
+    var csrf = csrfEl ? csrfEl.getAttribute('content') : '';
+
+    function $(id) { return document.getElementById(id); }
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined) n.textContent = text;      // textContent: user data can never inject HTML
+      return n;
+    }
+    function setBadge(node, n) { node.textContent = n > 99 ? '99+' : n; node.hidden = !(n > 0); }
+    function getJSON(url) {
+      return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    }
+    function showError(list, msg) { list.innerHTML = ''; list.appendChild(el('div', 'tb-empty', msg)); }
+
+    // ---- open / close (only one panel open at a time) ----
+    var closers = [];
+    function closeAll(except) { closers.forEach(function (c) { if (c.wrap !== except) c.close(); }); }
+    function makeDropdown(wrap, onOpen) {
+      var btn = wrap.querySelector('.tb-btn'), panel = wrap.querySelector('.tb-panel');
+      function close() { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+      function open() { closeAll(wrap); panel.hidden = false; btn.setAttribute('aria-expanded', 'true'); onOpen(); }
+      btn.addEventListener('click', function (e) { e.stopPropagation(); panel.hidden ? open() : close(); });
+      panel.addEventListener('click', function (e) { e.stopPropagation(); });
+      closers.push({ wrap: wrap, close: close });
+    }
+    document.addEventListener('click', function () { closeAll(null); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
+
+    // ---- Daily Todo Checklist ----
+    if (todoWrap) {
+      var tBadge = $('todoBadge'), tList = $('todoList'), tPill = $('todoPill');
+      var loadTodo = function () {
+        getJSON(todoWrap.dataset.feed).then(function (d) {
+          setBadge(tBadge, d.total);
+          tPill.textContent = d.total + ' PENDING';
+          tList.innerHTML = '';
+          if (!d.items.length) { showError(tList, "No pending tasks \u2014 you're all caught up."); return; }
+          d.items.forEach(function (it) {
+            var row = el('div', 'tb-item');
+            var body = el('div', 'tb-body');
+            body.appendChild(el('div', 'tb-title', it.title));
+            body.appendChild(el('div', 'tb-text', it.text));
+            var meta = el('div', 'tb-meta');
+            if (it.overdue) meta.appendChild(el('span', 'status-pill overdue', 'OVERDUE'));
+            if (it.lead_no !== '') meta.appendChild(el('span', '', '#' + it.lead_no));
+            body.appendChild(meta);
+            row.appendChild(body);
+
+            // Start / Complete buttons post to the existing /workflow/todo/<id>/start|complete routes
+            var form = el('form');
+            form.method = 'post';
+            form.action = it.status === 'pending' ? it.start_url : it.complete_url;
+            var token = el('input'); token.type = 'hidden'; token.name = 'csrf_token'; token.value = csrf;
+            var btn = el('button', 'btn btn-primary tb-act', it.status === 'pending' ? 'Start' : 'Complete');
+            btn.type = 'submit';
+            form.appendChild(token); form.appendChild(btn);
+            row.appendChild(form);
+            tList.appendChild(row);
+          });
+        }).catch(function () { showError(tList, "Couldn't load tasks. Please refresh the page."); });
+      };
+      makeDropdown(todoWrap, loadTodo);
+    }
+
+    // ---- Notification bell ----
+    if (bellWrap) {
+      var bBadge = $('bellBadge'), bList = $('bellList'), bPill = $('bellPill'), bMark = $('bellMarkAll');
+      var loadBell = function () {
+        return getJSON(bellWrap.dataset.feed).then(function (d) {
+          setBadge(bBadge, d.unread);
+          bPill.textContent = d.unread + ' NEW'; bPill.hidden = d.unread === 0;
+          bMark.hidden = d.unread === 0;
+          bList.innerHTML = '';
+          if (!d.items.length) { showError(bList, 'No notifications yet.'); return; }
+          d.items.forEach(function (it) {
+            var a = el('a', 'tb-item' + (it.is_read ? '' : ' unread'));
+            a.href = it.go;                                  // opens it (marks read) then goes to the page
+            var body = el('div', 'tb-body');
+            body.appendChild(el('div', 'tb-title', it.title));
+            body.appendChild(el('div', 'tb-text', it.text));
+            body.appendChild(el('div', 'tb-meta', it.ago));
+            a.appendChild(body);
+            bList.appendChild(a);
+          });
+        }).catch(function () {
+          if (!$('bellPanel').hidden) showError(bList, "Couldn't load notifications. Please refresh the page.");
+        });
+      };
+      bMark.addEventListener('click', function () {
+        fetch(bellWrap.dataset.readall, {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'fetch' }
+        }).then(loadBell);
+      });
+      makeDropdown(bellWrap, loadBell);
+      loadBell();                                            // fills the badge as soon as the page loads
+      setInterval(function () { if (!document.hidden) loadBell(); }, 30000);
+    }
+  })();
+</script>
 
 <script>
   // Preserve the sidebar's scroll position across full-page navigations —

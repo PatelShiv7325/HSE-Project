@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH{% endblock %}
+{% block breadcrumb_title %}Documents{% endblock %}
+{% block content %}
+<style>
+  .doc-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .doc-search { display:flex; gap:8px; align-items:center; }
+  .doc-search input { width:260px; max-width:100%; }
+  .view-toggle { display:flex; gap:8px; }
+  .view-btn {
+    display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:4px;
+    border:1px solid #cfd4dc; background:#fff; color:#4b5563; font-size:12px; font-weight:600;
+  }
+  .view-btn.active { background:#5b5bf0; border-color:#5b5bf0; color:#fff; }
+
+  .doc-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:20px; }
+  .doc-card { background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(16,24,40,.12); overflow:hidden; display:flex; flex-direction:column; }
+  .doc-head {
+    background:#ffa800; color:#fff; padding:9px 15px; font-weight:700; font-size:13.5px; letter-spacing:.01em;
+    text-transform:uppercase; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .doc-head span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .doc-head a { color:#fff; display:inline-flex; flex-shrink:0; }
+  .doc-progress { height:4px; background:transparent; }
+  .doc-progress > div { height:100%; background:#6ddc2f; }
+  .doc-body { padding:14px 15px 0; flex:1; }
+  .doc-client { font-size:14px; color:#374151; margin-bottom:6px; }
+  .doc-phone { font-size:14px; color:#374151; margin-bottom:14px; }
+  .doc-pending { background:#eceff3; border-radius:4px; padding:10px 12px; font-size:13px; color:#4b5563; height:92px; overflow-y:auto; }
+  .doc-pending strong { display:block; margin-bottom:2px; color:#6b7280; }
+  .doc-pending ul { margin:0; padding-left:18px; }
+  .doc-pending li { text-transform:uppercase; font-size:12.5px; line-height:1.6; }
+  .doc-pending li.hint { text-transform:none; font-size:13px; }
+  .doc-pending .all-done { color:var(--success); font-weight:600; }
+  .doc-foot { display:flex; justify-content:space-between; align-items:center; padding:14px 15px; }
+  .doc-no { font-size:12px; color:#9ca3af; }
+  .doc-check {
+    width:34px; height:30px; display:inline-flex; align-items:center; justify-content:center; padding:0;
+    background:#5b5bf0; color:#fff; border:0; border-radius:4px; cursor:pointer;
+  }
+  .doc-check:hover { background:#4a4ad8; }
+  .doc-empty { grid-column:1 / -1; text-align:center; padding:40px; color:var(--text-muted); background:#fff; border-radius:4px; }
+</style>
+
+<div class="doc-toolbar">
+  <form method="get" class="doc-search">
+    <input type="hidden" name="view" value="{{ view }}">
+    <input type="text" name="q" value="{{ search }}" placeholder="Search company, client or phone">
+    <button class="btn btn-outline" type="submit" style="padding:7px 14px;">Search</button>
+  </form>
+  <div class="view-toggle">
+    <a class="view-btn {% if view == 'table' %}active{% endif %}" href="{{ url_for('dish.documents', view='table', q=search) }}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 4v16"/></svg> Table View
+    </a>
+    <a class="view-btn {% if view == 'card' %}active{% endif %}" href="{{ url_for('dish.documents', view='card', q=search) }}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Card View
+    </a>
+  </div>
+</div>
+
+{% if view == 'card' %}
+<div class="doc-grid">
+  {% for r in rows %}
+  {% set c = r.case %}
+  <div class="doc-card">
+    <div class="doc-head">
+      <span title="{{ c.lead.company_name if c.lead else '-' }}">{{ c.lead.company_name if c.lead else '-' }}</span>
+      <a href="{{ url_for('dish.documents_edit', case_id=c.id) }}" title="Edit required documents">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </a>
+    </div>
+    <div class="doc-progress">{% if r.total %}<div style="width:{{ r.percent }}%;"></div>{% endif %}</div>
+    <div class="doc-body">
+      <div class="doc-client">{{ c.lead.client_name if c.lead and c.lead.client_name else '-' }}</div>
+      <div class="doc-phone">{{ c.lead.contact_no if c.lead and c.lead.contact_no else '-' }}</div>
+      <div class="doc-pending">
+        {% if not r.total %}
+          <strong>Pending:</strong>
+          <ul><li class="hint">Update Required Documents List</li></ul>
+        {% elif not r.pending %}
+          <span class="all-done">&#10003; All documents received</span>
+        {% else %}
+          <strong>Pending:</strong>
+          <ul>{% for name in r.pending %}<li>{{ name }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+    </div>
+    <div class="doc-foot">
+      <span class="doc-no">#{{ c.lead_id }}</span>
+      <form method="post" action="{{ url_for('dish.documents_complete', case_id=c.id) }}"
+            onsubmit="return confirm('Mark all documents as received for this company?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="view" value="card">
+        <button class="doc-check" type="submit" title="Mark all documents received">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="doc-empty">No DISH cases found.</div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr><th>Lead No.</th><th>Company Name</th><th>Client</th><th>Contact</th><th>Documents</th><th>Pending</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        {% set c = r.case %}
+        <tr>
+          <td>#{{ c.lead_id }}</td>
+          <td style="font-weight:600;">{{ c.lead.company_name if c.lead else '-' }}</td>
+          <td>{{ c.lead.client_name if c.lead else '-' }}</td>
+          <td>{{ c.lead.contact_no if c.lead else '-' }}</td>
+          <td>{% if r.total %}{{ r.done }} / {{ r.total }} received{% else %}<span class="text-muted">List not set</span>{% endif %}</td>
+          <td style="max-width:320px;">
+            {% if not r.total %}<span class="text-muted">Update Required Documents List</span>
+            {% elif not r.pending %}<span class="status-pill done">Complete</span>
+            {% else %}{{ r.pending|join(', ') }}{% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <a class="btn btn-outline" style="padding:5px 10px;" href="{{ url_for('dish.documents_edit', case_id=c.id) }}" title="Edit required documents">Edit</a>
+            <form method="post" action="{{ url_for('dish.documents_complete', case_id=c.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Mark all documents as received for this company?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="view" value="table">
+              <button class="btn btn-primary" style="padding:5px 10px;" type="submit" title="Mark all documents received">&#10003;</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center; padding:24px;">No DISH cases found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

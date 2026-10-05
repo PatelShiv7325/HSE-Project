@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
 from app.models import SiteVisit, Measurement, Engineer, Lead, User
+from app.notify import notify, admin_users, nice_date
 
 fieldwork_bp = Blueprint("fieldwork", __name__, url_prefix="/fieldwork")
 
@@ -61,6 +62,17 @@ def create_site_visit():
     )
     db.session.add(visit)
     db.session.commit()
+
+    # tell the admins and the engineer who has to go
+    company = visit.lead.company_name if visit.lead else ""
+    raw_date = request.form.get("scheduled_date")
+    when = " on Date %s" % nice_date(raw_date) if raw_date else ""
+    recipients = admin_users()
+    if visit.engineer and visit.engineer.user_id:
+        recipients.append(visit.engineer.user_id)
+    notify(recipients, "Site Visit for Measurement Scheduled",
+           "Site Visit for Measurement Scheduled for the company %s%s" % (company, when),
+           url_for("fieldwork.site_visits"))
     flash("Site visit scheduled.", "success")
     return redirect(url_for("fieldwork.site_visits"))
 
@@ -195,5 +207,10 @@ def assign_measurement(measurement_id):
     m.assigned_to_id = request.form.get("user_id")
     m.status = "assigned"
     db.session.commit()
+
+    company = m.site_visit.lead.company_name if m.site_visit and m.site_visit.lead else ""
+    notify([m.assigned_to_id], "Measurement Assigned",
+           "Measurement Assigned for the company %s." % company,
+           url_for("fieldwork.measurements"))
     flash("Measurement assigned.", "success")
     return redirect(url_for("fieldwork.assign_measurement_list"))

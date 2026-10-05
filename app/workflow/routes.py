@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models import WorkStage, Lead, User
@@ -75,3 +75,36 @@ def complete_work(stage_id):
     db.session.commit()
     flash("Marked complete.", "success")
     return redirect(request.referrer or url_for("workflow.todo"))
+
+
+@workflow_bp.route("/todo-feed")
+@login_required
+def todo_feed():
+    """JSON for the topbar 'Daily Todo Checklist' dropdown: pending count + first 10 tasks.
+    Admin sees everyone's pending work, others see only their own (same rule as /workflow/todo)."""
+    query = WorkStage.query.filter(WorkStage.status != "done")
+    if not current_user.is_admin:
+        query = query.filter(WorkStage.assigned_to_id == current_user.id)
+
+    total = query.count()
+    # oldest due date first (so overdue work is on top); tasks with no due date last
+    stages = query.order_by(WorkStage.due_date.is_(None), WorkStage.due_date).limit(10).all()
+
+    items = []
+    for s in stages:
+        company = s.lead.company_name if s.lead else ""
+        role = s.role.name if s.role else ""
+        text = ("Due " + s.due_date.strftime("%d %b %Y")) if s.due_date else "No due date"
+        if role:
+            text = "%s - %s" % (role, text)
+        items.append({
+            "id": s.id,
+            "title": "%s: %s" % (s.stage_name, company) if company else s.stage_name,
+            "text": text,
+            "overdue": s.is_overdue,
+            "status": s.status,
+            "lead_no": s.lead.id if s.lead else "",
+            "start_url": url_for("workflow.start_work", stage_id=s.id),
+            "complete_url": url_for("workflow.complete_work", stage_id=s.id),
+        })
+    return jsonify(total=total, items=items)

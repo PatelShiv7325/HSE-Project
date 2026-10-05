@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
 from app.models import Lead, Estimation, Department, WorkStage, Payment
+from app.notify import notify, admin_users, nice_date
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales")
 
@@ -88,6 +89,9 @@ def create_lead():
     )
     db.session.add(lead)
     db.session.commit()
+    notify(admin_users(), "New Lead Added",
+           "New lead added for the company %s." % lead.company_name,
+           url_for("sales.leads"))
     flash("Lead created.", "success")
     return redirect(url_for("sales.leads"))
 
@@ -101,10 +105,14 @@ def edit_lead(lead_id):
     lead.client_name = request.form.get("client_name")
     lead.contact_no = request.form.get("contact_no")
     lead.department_id = request.form.get("department_id") or None
+    old_status = lead.status
     lead.status = request.form.get("status") or lead.status
 
-
     db.session.commit()
+    if lead.status == "work_order_received" and old_status != "work_order_received":
+        notify(admin_users(), "Work Order Received",
+               "Work Order Received for the company %s on Date %s." % (lead.company_name, nice_date()),
+               url_for("sales.leads"))
     flash("Lead updated.", "success")
     return redirect(url_for("sales.leads"))
 

@@ -1,10 +1,10 @@
 import json
 import urllib.parse
 import urllib.request
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import WhatsAppLog, Lead, MessageTemplate, ConfigSetting, EmailLog
+from app.models import WhatsAppLog, Lead, MessageTemplate, ConfigSetting, EmailLog, Notification
 from datetime import datetime, timedelta
 from email_service import get_smtp_settings, save_smtp_settings, send_email
 
@@ -270,3 +270,97 @@ def email_settings_test():
           else "Couldn't send the test email -- check the log below for the error.",
           "success" if ok else "danger")
     return redirect(url_for("notifications.email_settings"))
+
+
+# ---------------------------------------------------------------------------
+# Notification centre: topbar bell feed + Notifications page
+# ---------------------------------------------------------------------------
+def _ago(dt):
+    if not dt:
+        return ""
+    secs = int((datetime.utcnow() - dt).total_seconds())
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return "%dm ago" % (secs // 60)
+    if secs < 86400:
+        return "%dh ago" % (secs // 3600)
+    return "%dd ago" % (secs // 86400)
+
+
+def _mine():
+    return Notification.query.filter_by(user_id=current_user.id)
+
+
+@notifications_bp.route("/")
+@login_required
+def center():
+    per_page = 20
+    page = request.args.get("page", 1, type=int)
+    query = _mine().order_by(Notification.created_at.desc(), Notification.id.desc())
+    total = query.count()
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, pages))
+    rows = query.offset((page - 1) * per_page).limit(per_page).all()
+    return render_template(
+        "notifications/center.html",
+        rows=rows, page=page, pages=pages, total=total,
+        unread=_mine().filter_by(is_read=False).count(),
+        ago=_ago,
+    )
+
+
+@notifications_bp.route("/feed")
+@login_required
+def feed():
+    """JSON for the bell dropdown: unread count + the 8 latest notifications."""
+    rows = _mine().order_by(Notification.created_at.desc(), Notification.id.desc()).limit(8).all()
+    return jsonify(
+        unread=_mine().filter_by(is_read=False).count(),
+        items=[{
+            "id": n.id,
+            "title": n.title,
+            "text": n.message or "",
+            "is_read": n.is_read,
+            "ago": _ago(n.created_at),
+            "go": url_for("notifications.open_notification", notif_id=n.id),
+        } for n in rows],
+    )
+
+
+@notifications_bp.route("/<int:notif_id>/open")
+@login_required
+def open_notification(notif_id):
+    """Clicking a notification: mark it read, then go to the page it points to."""
+    n = _mine().filter_by(id=notif_id).first_or_404()
+    n.is_read = True
+    db.session.commit()
+    return redirect(n.link or url_for("notifications.center"))
+
+
+@notifications_bp.route("/<int:notif_id>/read", methods=["POST"])
+@login_required
+def mark_read(notif_id):
+    n = _mine().filter_by(id=notif_id).first_or_404()
+    n.is_read = True
+    db.session.commit()
+    return redirect(request.referrer or url_for("notifications.center"))
+
+
+@notifications_bp.route("/<int:notif_id>/delete", methods=["POST"])
+@login_required
+def delete_notification(notif_id):
+    n = _mine().filter_by(id=notif_id).first_or_404()
+    db.session.delete(n)
+    db.session.commit()
+    return redirect(request.referrer or url_for("notifications.center"))
+
+
+@notifications_bp.route("/read-all", methods=["POST"])
+@login_required
+def mark_all_read():
+    _mine().filter_by(is_read=False).update({"is_read": True})
+    db.session.commit()
+    if request.headers.get("X-Requested-With") == "fetch":   # called from the bell dropdown
+        return jsonify(ok=True)
+    return redirect(request.referrer or url_for("notifications.center"))

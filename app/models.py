@@ -416,3 +416,18 @@ class ConfigSetting(db.Model):
     value = db.Column(db.String(255))
     file_path = db.Column(db.String(255))
     field_type = db.Column(db.String(20), default="text")  # "number" or "file"
+
+
+class Notification(db.Model):
+    """One row per notification per user -- shown by the topbar bell and the Notifications page."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    title = db.Column(db.String(150), nullable=False)
+    message = db.Column(db.Text)
+    link = db.Column(db.String(255))          # where clicking the notification goes
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship(
+        "User", backref=db.backref("notifications", cascade="all, delete-orphan")
+    )

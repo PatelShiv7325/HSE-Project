@@ -8,7 +8,8 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app import db
-from app.models import DishCase, DishApplication, Lead, User, SiteVisit
+from app.models import DishCase, DishDocument, DishApplication, Lead, User, SiteVisit
+from app.notify import notify, admin_users
 
 dish_bp = Blueprint("dish", __name__, url_prefix="/dish")
 
@@ -117,20 +118,46 @@ def create_case():
     return redirect(url_for("dish.assign"))
 
 
+# Which form field = which role (used for the "X Assigned" notifications)
+ASSIGN_ROLE_LABELS = {
+    "documentation_user_id": "Documentation",
+    "stability_user_id": "Stability",
+    "drafting_user_id": "Drafting",
+    "online_application_user_id": "Online Application",
+    "liaisoning_map_user_id": "Liaisoning Application",
+    "license_user_id": "License",
+    "liaisoning_license_user_id": "Liaisoning License",
+}
+
+
 @dish_bp.route("/assign/<int:case_id>/update", methods=["POST"])
 @login_required
 def update_assignment(case_id):
     case = DishCase.query.get_or_404(case_id)
-    for field in [
-        "documentation_user_id", "stability_user_id", "drafting_user_id",
-        "online_application_user_id", "liaisoning_map_user_id",
-        "license_user_id", "liaisoning_license_user_id",
-    ]:
-        value = request.form.get(field)
-        setattr(case, field, value or None)
+    changed = []   # (label, newly assigned user id) for every role whose person changed
+    for field, label in ASSIGN_ROLE_LABELS.items():
+        value = request.form.get(field) or None
+        if value and str(value) != str(getattr(case, field) or ""):
+            changed.append((label, value))
+        setattr(case, field, value)
     deadline = request.form.get("drafting_deadline")
     case.drafting_deadline = deadline or None
     db.session.commit()
+
+    company = case.lead.company_name if case.lead else ""
+    for label, user_id in changed:
+        person = User.query.get(int(user_id))
+        if not person:
+            continue
+        # the person who got the work
+        notify([person], "%s Assigned" % label,
+               "%s Assigned for the company %s." % (label, company),
+               url_for("dish.assign"))
+        # the admins (everyone except the person above, who already got theirs)
+        notify([a for a in admin_users() if a.id != person.id],
+               "%s Assigned" % label,
+               "%s has been assigned to work on %s on Lead #%s for the company %s." % (person.name, label.lower(), case.lead_id, company),
+               url_for("dish.assign"))
     flash("Assignment updated.", "success")
     return redirect(url_for("dish.assign"))
 
@@ -188,7 +215,91 @@ def form_edit(case_id):
 @dish_bp.route("/documents")
 @login_required
 def documents():
-    return render_template("dish/coming_soon.html", title="Documents")
+    search = request.args.get("q", "").strip()
+    view = request.args.get("view", "card")
+    if view not in ("card", "table"):
+        view = "card"
+
+    query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
+    if search:
+        query = query.filter(
+            db.or_(
+                Lead.company_name.ilike(f"%{search}%"),
+                Lead.client_name.ilike(f"%{search}%"),
+                Lead.contact_no.ilike(f"%{search}%"),
+            )
+        )
+    cases = query.order_by(DishCase.id.desc()).all()
+
+    rows = []
+    for c in cases:
+        docs = list(c.documents)
+        pending = [d.name for d in docs if not d.uploaded]
+        total = len(docs)
+        done = total - len(pending)
+        rows.append({
+            "case": c,
+            "pending": pending,
+            "total": total,
+            "done": done,
+            "percent": int(done * 100 / total) if total else 0,
+        })
+
+    return render_template("dish/documents.html", rows=rows, search=search, view=view)
+
+
+@dish_bp.route("/documents/<int:case_id>/edit", methods=["GET", "POST"])
+@login_required
+def documents_edit(case_id):
+    case = DishCase.query.get_or_404(case_id)
+
+    if request.method == "POST":
+        # One required document per line; duplicates and blank lines are ignored.
+        names, seen = [], set()
+        for line in request.form.get("required_docs", "").splitlines():
+            name = line.strip()
+            key = name.lower()
+            if name and key not in seen:
+                seen.add(key)
+                names.append(name[:200])
+
+        received = {v.strip().lower() for v in request.form.getlist("received")}
+
+        # Keep existing rows whose name is still listed, drop the rest.
+        kept = {}
+        for doc in list(case.documents):
+            key = doc.name.strip().lower()
+            if key in seen and key not in kept:
+                kept[key] = doc
+            else:
+                db.session.delete(doc)
+
+        for name in names:
+            doc = kept.get(name.lower())
+            if doc is None:
+                doc = DishDocument(dish_case_id=case.id, name=name)
+                db.session.add(doc)
+            doc.uploaded = name.lower() in received
+
+        db.session.commit()
+        flash("Required documents updated.", "success")
+        return redirect(url_for("dish.documents", view=request.form.get("view", "card")))
+
+    return render_template("dish/documents_edit.html", case=case)
+
+
+@dish_bp.route("/documents/<int:case_id>/complete", methods=["POST"])
+@login_required
+def documents_complete(case_id):
+    case = DishCase.query.get_or_404(case_id)
+    if not case.documents:
+        flash("Add the required documents list first (click the pencil icon).", "danger")
+    else:
+        for doc in case.documents:
+            doc.uploaded = True
+        db.session.commit()
+        flash("All documents marked as received.", "success")
+    return redirect(url_for("dish.documents", view=request.form.get("view", "card")))
 
 
 DRAFTING_STATUS_LABELS = {

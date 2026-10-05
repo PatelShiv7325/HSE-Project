@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block breadcrumb_parent %}DISH / Documents{% endblock %}
+{% block breadcrumb_title %}Required Documents{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+  <div class="toolbar">
+    <h4 style="margin:0;">{{ case.lead.company_name if case.lead else 'DISH Case' }}</h4>
+    <a href="{{ url_for('dish.documents') }}" class="btn btn-outline">Back to Documents</a>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label style="display:block; margin-bottom:6px;">Required documents (one per line)</label>
+    <textarea name="required_docs" rows="9" style="width:100%; margin-bottom:18px;"
+              placeholder="LIGHT BILL&#10;OLD LICENSE&#10;OLD STABILITY&#10;ATTENDANCE SHEET">{% for d in case.documents %}{{ d.name }}{{ "\n" if not loop.last }}{% endfor %}</textarea>
+
+    {% if case.documents %}
+    <label style="display:block; margin-bottom:8px;">Already received (tick the documents you have)</label>
+    <div style="display:grid; gap:8px; margin-bottom:20px;">
+      {% for d in case.documents %}
+      <label style="display:flex; align-items:center; gap:10px; font-size:13px; font-weight:600; color:var(--text); cursor:pointer;">
+        <input type="checkbox" name="received" value="{{ d.name }}" {{ 'checked' if d.uploaded }}>
+        <span style="text-transform:uppercase;">{{ d.name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn btn-outline" href="{{ url_for('dish.documents') }}">Cancel</a>
+  </form>
+  <p class="text-muted" style="margin-top:14px; font-size:12px;">New lines you add here start as pending. After saving, tick them as received from this page or use the &#10003; button on the card.</p>
+</div>
+{% endblock %}
