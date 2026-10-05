@@ -206,10 +206,64 @@ select:focus-visible, textarea:focus-visible {
 
 .content { padding: 24px 28px 40px; max-width: 1440px; }
 
-/* ---------- Page change: instant, like the reference app ----------
-   No fade-out / fade-in between pages. Only small button feedback. */
+/* ---------- Page entrance animation (same as the reference DISH software) ----------
+   Reference: every page is a framer-motion div with
+     initial={{ opacity: 0, y: 20 }}  ->  animate={{ opacity: 1, y: 0 }}
+   and table rows animate in with y: 10 and a 50ms stagger per row.
+   There is NO fade-out on the old page, so the new page simply slides up
+   and fades in as soon as it loads. */
+.content { animation: pageEnter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.content table tbody tr { animation: rowEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.content table tbody tr:nth-child(1)  { animation-delay: 0s; }
+.content table tbody tr:nth-child(2)  { animation-delay: 0.05s; }
+.content table tbody tr:nth-child(3)  { animation-delay: 0.10s; }
+.content table tbody tr:nth-child(4)  { animation-delay: 0.15s; }
+.content table tbody tr:nth-child(5)  { animation-delay: 0.20s; }
+.content table tbody tr:nth-child(6)  { animation-delay: 0.25s; }
+.content table tbody tr:nth-child(7)  { animation-delay: 0.30s; }
+.content table tbody tr:nth-child(8)  { animation-delay: 0.35s; }
+.content table tbody tr:nth-child(9)  { animation-delay: 0.40s; }
+.content table tbody tr:nth-child(n+10) { animation-delay: 0.45s; }
+
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Smooth page-to-page transition (no white flash) ----------
+   Real browser feature for full-page navigations (Chrome / Edge / Safari):
+   the OLD page stays on screen until the NEW page is ready, then they
+   cross-fade. The sidebar and top bar are given their own names so they
+   stay in place and only the content area changes -- like the reference
+   single-page app. Firefox simply falls back to the slide-up animation above. */
+@view-transition { navigation: auto; }
+
+.sidebar { view-transition-name: app-sidebar; }
+.topbar  { view-transition-name: app-topbar; }
+
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 0.28s; animation-timing-function: ease; }
+::view-transition-old(app-sidebar),
+::view-transition-new(app-sidebar),
+::view-transition-old(app-topbar),
+::view-transition-new(app-topbar) { animation-duration: 0.2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+}
+
 button, .btn { transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease; }
 button:active:not(:disabled), .btn:active { transform: scale(0.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .content, .content table tbody tr { animation: none; }
+}
 
 /* ---------- Tabs (Admin / Work / Employee Dashboard style) ---------- */
 .tab-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
