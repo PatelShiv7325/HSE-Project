@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta
 import os
 from uuid import uuid4
-from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash,
+from flask import (abort, Blueprint, render_template, request, redirect, url_for, flash,
     current_app, send_from_directory,
 )
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app import db
 from app.utils import get_per_page
+from app.uploads import save_upload, find_upload
 from app.models import DishCase, DishDocument, DishApplication, Lead, User, SiteVisit
 from app.notify import notify, admin_users
 
@@ -333,14 +333,7 @@ DRAFTING_ADVANCE_TO = {
 def _save_drafting_file(file_obj, case_id):
     """Saves an uploaded drafting file under static/uploads/drafting and
     returns the stored filename, or None if no file was chosen."""
-    if not file_obj or not file_obj.filename:
-        return None
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "drafting")
-    os.makedirs(upload_dir, exist_ok=True)
-    filename = secure_filename(file_obj.filename)
-    stored_name = f"drafting_{case_id}_{uuid4().hex}_{filename}"
-    file_obj.save(os.path.join(upload_dir, stored_name))
-    return stored_name
+    return save_upload(file_obj, "drafting", f"drafting_{case_id}_")
 
 
 @dish_bp.route("/drafting")
@@ -412,8 +405,10 @@ def drafting_upload(case_id):
 @dish_bp.route("/drafting/uploads/<path:filename>")
 @login_required
 def drafting_download(filename):
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "drafting")
-    return send_from_directory(upload_dir, filename)
+    path = find_upload("drafting", filename)
+    if not path:
+        abort(404)
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
 
 
 @dish_bp.route("/drafting/<int:case_id>/advance", methods=["POST"])
@@ -697,14 +692,7 @@ def _save_stability_file(file_obj, case_id, tag):
     """Saves an uploaded stability structure/certificate document under
     static/uploads/stability and returns the stored filename, or None if
     no file was chosen."""
-    if not file_obj or not file_obj.filename:
-        return None
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "stability")
-    os.makedirs(upload_dir, exist_ok=True)
-    filename = secure_filename(file_obj.filename)
-    stored_name = f"{tag}_{case_id}_{uuid4().hex}_{filename}"
-    file_obj.save(os.path.join(upload_dir, stored_name))
-    return stored_name
+    return save_upload(file_obj, "stability", f"{tag}_{case_id}_")
 
 
 @dish_bp.route("/certificates")
@@ -803,8 +791,10 @@ def certificate_file(case_id):
 @dish_bp.route("/certificates/uploads/<path:filename>")
 @login_required
 def certificate_download(filename):
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "stability")
-    return send_from_directory(upload_dir, filename)
+    path = find_upload("stability", filename)
+    if not path:
+        abort(404)
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
 
 
 @dish_bp.route("/certificates/<int:case_id>/send-review", methods=["POST"])

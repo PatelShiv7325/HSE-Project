@@ -65,7 +65,7 @@
 
       <label class="upload-box" for="logo-input">
         {% if profile.logo_filename %}
-          <img class="preview" src="{{ url_for('static', filename='uploads/company/' ~ profile.logo_filename) }}" alt="Logo">
+          <img class="preview" src="{{ url_for('files.serve', kind='company', filename=profile.logo_filename) }}" alt="Logo">
         {% else %}
           <img class="preview" src="{{ url_for('static', filename='images/logo.png') }}" alt="Default logo">
         {% endif %}
@@ -78,7 +78,7 @@
       <label class="field-label">Default Inspector Signature</label>
       <label class="upload-box" for="signature-input" style="margin-top:8px;">
         {% if profile.signature_filename %}
-          <img class="preview" src="{{ url_for('static', filename='uploads/company/' ~ profile.signature_filename) }}" alt="Signature">
+          <img class="preview" src="{{ url_for('files.serve', kind='company', filename=profile.signature_filename) }}" alt="Signature">
           <div class="drop-label">CHANGE SIGNATURE</div>
         {% else %}
           <div class="upload-icon">
@@ -95,7 +95,7 @@
       <label class="field-label">Official Office Stamp</label>
       <label class="upload-box" for="stamp-input" style="margin-top:8px;">
         {% if profile.stamp_filename %}
-          <img class="preview" src="{{ url_for('static', filename='uploads/company/' ~ profile.stamp_filename) }}" alt="Stamp">
+          <img class="preview" src="{{ url_for('files.serve', kind='company', filename=profile.stamp_filename) }}" alt="Stamp">
           <div class="drop-label">CHANGE STAMP</div>
         {% else %}
           <div class="upload-icon">

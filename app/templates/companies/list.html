@@ -116,10 +116,12 @@
           <td style="display:flex; gap:6px; flex-wrap:wrap;">
             <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('companies.company_reports', company_id=c.id) }}">Reports</a>
             <a class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" href="{{ url_for('companies.edit_company', company_id=c.id) }}">Edit</a>
+            {% if current_user.is_admin %}
             <form method="post" action="{{ url_for('companies.delete_company', company_id=c.id) }}" onsubmit="return confirm('Delete this company? Its linked reports will NOT be deleted, only unlinked.');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px; color:var(--danger); border-color:var(--danger);" type="submit">Delete</button>
             </form>
+            {% endif %}
           </td>
         </tr>
       {% else %}

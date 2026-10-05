@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
-from app.utils import get_per_page
+from app.utils import get_per_page, admin_required
 from app.models import Lead, Estimation, Department, WorkStage, Payment
 from app.notify import notify, admin_users, nice_date
 
@@ -120,6 +120,7 @@ def edit_lead(lead_id):
 
 @sales_bp.route("/leads/<int:lead_id>/delete", methods=["POST"])
 @login_required
+@admin_required
 def delete_lead(lead_id):
     lead = Lead.query.get_or_404(lead_id)
     db.session.delete(lead)
@@ -183,7 +184,7 @@ def create_estimation():
     existing_payment = Payment.query.filter_by(lead_id=lead_id).first()
     if not existing_payment:
         db.session.add(Payment(lead_id=lead_id, amount=amount, paid_percentage=0, status="estimate_generated"))
-
+    
     db.session.commit()
     flash("Estimation created.", "success")
     return redirect(url_for("sales.estimation"))

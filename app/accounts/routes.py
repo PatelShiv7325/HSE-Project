@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
-from app.utils import get_per_page
+from app.utils import get_per_page, admin_required
 from app.models import Payment, Lead
 
 accounts_bp = Blueprint("accounts", __name__, url_prefix="/accounts")
@@ -62,6 +62,7 @@ def pending_payments():
 
 @accounts_bp.route("/payments/<int:payment_id>/update", methods=["POST"])
 @login_required
+@admin_required
 def update_payment(payment_id):
     p = Payment.query.get_or_404(payment_id)
     p.status = request.form.get("status") or p.status

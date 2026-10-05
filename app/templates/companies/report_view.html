@@ -50,7 +50,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th style="width:30px;"><input type="checkbox" onclick="this.closest('table').querySelectorAll('.row-check').forEach(cb => cb.checked = this.checked)"></th>
+            {% if current_user.is_admin %}<th style="width:30px;"><input type="checkbox" onclick="this.closest('table').querySelectorAll('.row-check').forEach(cb => cb.checked = this.checked)"></th>{% endif %}
             <th>Report No.</th><th>Date</th><th>Action</th>
           </tr>
         </thead>
@@ -58,7 +58,7 @@
         {% for r in reports %}
           {% set endpoints = form_type_endpoints.get(ftype) %}
           <tr>
-            <td><input type="checkbox" class="row-check" name="report_ids" value="{{ r.id }}"></td>
+            {% if current_user.is_admin %}<td><input type="checkbox" class="row-check" name="report_ids" value="{{ r.id }}"></td>{% endif %}
             <td>{{ r.report_no }}</td>
             <td>{{ r.report_date|dmy('-') }}</td>
             <td style="display:flex; gap:6px;">
@@ -82,7 +82,7 @@
 {% endfor %}
 
 <div style="margin-bottom:24px;">
-  <button type="submit" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);">Delete Selected</button>
+  {% if current_user.is_admin %}<button type="submit" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);">Delete Selected</button>{% endif %}
 </div>
 </form>
 {% endblock %}

@@ -5,9 +5,9 @@
 <div class="card">
   <form method="post" action="{{ url_for('admin.create_user') }}" style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="name" placeholder="Full Name" required>
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="password" name="password" placeholder="Password">
+    <input type="text" name="name" placeholder="Full Name" required autocomplete="off">
+    <input type="email" name="email" placeholder="Email" required autocomplete="off">
+    <input type="password" name="password" placeholder="Password (blank = random)" autocomplete="new-password">
     <select name="role_id">
       <option value="">Role</option>
       {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}

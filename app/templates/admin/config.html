@@ -37,7 +37,7 @@
           <td>
             {% if c.field_type == 'file' %}
               {% if c.file_path %}
-                <a class="btn btn-outline" href="{{ url_for('static', filename='uploads/config/' ~ c.file_path) }}" target="_blank">View PDF</a>
+                <a class="btn btn-outline" href="{{ url_for('files.serve', kind='config', filename=c.file_path) }}" target="_blank">View PDF</a>
               {% else %}
                 <span class="text-muted">Not uploaded</span>
               {% endif %}

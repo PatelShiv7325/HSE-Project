@@ -61,7 +61,7 @@
           <td>{{ loop.index }}</td>
           <td>
             {% if e.photo_filename %}
-              <img src="{{ url_for('static', filename='uploads/engineers/' ~ e.photo_filename) }}" alt="{{ e.user.name }}"
+              <img src="{{ url_for('files.serve', kind='engineers', filename=e.photo_filename) }}" alt="{{ e.user.name }}"
                    style="width:40px; height:40px; object-fit:cover; border-radius:6px; border:1px solid var(--border);">
             {% else %}
               <div style="width:40px; height:40px; border-radius:6px; background:var(--info-bg); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">

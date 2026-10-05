@@ -32,6 +32,12 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Where uploaded files live. On Render set UPLOAD_ROOT to a Persistent Disk path (e.g. /var/data/uploads).
+    UPLOAD_ROOT = os.environ.get('UPLOAD_ROOT') or os.path.join(basedir, 'uploads')
+    # Optional: a dedicated Fernet key for encrypting stored portal passwords.
+    # If empty, a key is derived from SECRET_KEY.
+    FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY')
+
     # Company Information
     COMPANY_NAME = "Global HSE Associates"
     COMPANY_TAGLINE = "An ISO 9001 & 45001 Certified Company"

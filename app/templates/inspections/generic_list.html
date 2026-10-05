@@ -47,10 +47,12 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px;" type="submit">Renew</button>
             </form>
+            {% if current_user.is_admin %}
             <form method="post" action="{{ url_for('inspections.generic_delete', form_type=form_type, report_id=r.id) }}" onsubmit="return confirm('Delete this report?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-outline" style="padding:5px 10px; font-size:12.5px; color:var(--danger); border-color:var(--danger);" type="submit">Delete</button>
             </form>
+            {% endif %}
           </td>
         </tr>
       {% else %}

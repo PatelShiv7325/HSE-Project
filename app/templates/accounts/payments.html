@@ -44,6 +44,7 @@
           <td>{{ p.paid_percentage or 0 }}</td>
           <td><span class="status-pill {{ 'done' if p.status == 'complete' else 'pending' }}">{{ (p.status or '-').replace('_', ' ')|upper }}</span></td>
           <td>
+            {% if current_user.is_admin %}
             <button type="button" title="Update Payment" onclick="document.getElementById('payRow{{ p.id }}').classList.toggle('open')" style="width:30px; height:30px; border-radius:6px; background:var(--info-bg); color:var(--info); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">₹</button>
             <form id="payRow{{ p.id }}" method="post" action="{{ url_for('accounts.update_payment', payment_id=p.id) }}" class="payment-inline-form">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -56,6 +57,7 @@
               </select>
               <button class="btn btn-primary" type="submit" style="padding:4px 10px; font-size:12px;">Save</button>
             </form>
+            {% endif %}
           </td>
         </tr>
       {% else %}

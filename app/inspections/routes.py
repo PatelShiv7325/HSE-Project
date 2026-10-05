@@ -2,7 +2,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
 from flask_login import login_required, current_user
 from app import db
-from app.utils import get_per_page
+from app.utils import get_per_page, admin_required
 from app.models import InspectionReport, Company, CompanyProfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -93,8 +93,9 @@ def _logo_data_uri(profile=None):
     app_dir = os.path.dirname(os.path.dirname(__file__))
 
     if profile and profile.logo_filename:
-        custom_path = os.path.join(app_dir, "static", "uploads", "company", profile.logo_filename)
-        if os.path.isfile(custom_path):
+        from app.uploads import find_upload
+        custom_path = find_upload("company", profile.logo_filename)
+        if custom_path:
             with open(custom_path, "rb") as f:
                 encoded = base64.b64encode(f.read()).decode("ascii")
             ext = os.path.splitext(profile.logo_filename)[1].lstrip(".").lower() or "png"
@@ -289,9 +290,9 @@ def _profile_image_uri(filename):
     import os
     if not filename:
         return ""
-    path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                        "static", "uploads", "company", filename)
-    if not os.path.isfile(path):
+    from app.uploads import find_upload
+    path = find_upload("company", filename)
+    if not path:
         return ""
     mime = mimetypes.guess_type(path)[0] or "image/png"
     with open(path, "rb") as f:
@@ -464,6 +465,7 @@ def _form9_save(report):
 
 @inspections_bp.route("/form9/<int:report_id>/delete", methods=["POST"])
 @login_required
+@admin_required
 def form9_delete(report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type="form9").first_or_404()
     db.session.delete(report)
@@ -1347,6 +1349,7 @@ def _generic_save(form_type, report):
 
 @inspections_bp.route("/<any(form10, form11, psv, centrifuge, form26a, tfh):form_type>/<int:report_id>/delete", methods=["POST"])
 @login_required
+@admin_required
 def generic_delete(form_type, report_id):
     report = InspectionReport.query.filter_by(id=report_id, form_type=form_type).first_or_404()
     db.session.delete(report)

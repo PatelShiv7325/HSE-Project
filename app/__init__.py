@@ -12,6 +12,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
 
+    if app.config.get("IS_PRODUCTION"):
+        # Render sits behind a proxy: trust its X-Forwarded-* headers so request.remote_addr is the
+        # real visitor IP (needed for login rate-limiting) and emailed links use https://.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
@@ -101,6 +107,9 @@ def create_app():
     app.register_blueprint(api_bp)
     app.register_blueprint(accounts_bp)
     app.register_blueprint(companies_bp)
+
+    from app import uploads
+    uploads.register(app)
 
     # NOTE: api_bp is no longer CSRF-exempt -- it uses the logged-in session cookie, so exempting
     # it let any other website change task status on a user's behalf. Fetch calls must send
@@ -206,4 +215,34 @@ def _ensure_schema_upgrades():
                     f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'
                 ))
                 print(f"[schema upgrade] added {table.name}.{col.name}", flush=True)
+
+    _upgrade_encrypted_columns()
+
+
+def _upgrade_encrypted_columns():
+    """Portal passwords are now stored encrypted. (1) On Postgres widen the old varchar(120)
+    columns to TEXT; (2) encrypt any value that is still plain text. Safe to run on every start."""
+    from sqlalchemy import text
+    from app.models import DishCase
+    from app.security import encrypt_text, PREFIX
+
+    table = DishCase.__table__.name
+    columns = ("map_portal_password", "license_portal_password")
+    with db.engine.begin() as conn:
+        if db.engine.dialect.name == "postgresql":
+            for col in columns:
+                kind = conn.execute(text(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_name = :t AND column_name = :c"), {"t": table, "c": col}).scalar()
+                if kind == "character varying":
+                    conn.execute(text(f'ALTER TABLE "{table}" ALTER COLUMN "{col}" TYPE TEXT'))
+        for col in columns:
+            rows = conn.execute(text(
+                f'SELECT id, "{col}" FROM "{table}" WHERE "{col}" IS NOT NULL AND "{col}" <> \'\' '
+                f'AND "{col}" NOT LIKE :p'), {"p": PREFIX + "%"}).fetchall()
+            for row_id, plain in rows:
+                conn.execute(text(f'UPDATE "{table}" SET "{col}" = :v WHERE id = :i'),
+                             {"v": encrypt_text(plain), "i": row_id})
+            if rows:
+                print(f"[security] encrypted {len(rows)} value(s) in {table}.{col}", flush=True)
 

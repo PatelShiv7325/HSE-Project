@@ -9,6 +9,36 @@ from app.utils import home_url
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
+# ---- simple login brute-force protection (per worker process, in memory) ----
+import time
+_FAILS = {}                 # key -> [timestamps of failed attempts]
+_WINDOW = 15 * 60           # look back 15 minutes
+_MAX_PER_ACCOUNT = 5        # failed attempts per (ip + email)
+_MAX_PER_IP = 20            # failed attempts per ip, any email
+
+
+def _recent(key):
+    now = time.time()
+    hits = [t for t in _FAILS.get(key, []) if now - t < _WINDOW]
+    if hits:
+        _FAILS[key] = hits
+    else:
+        _FAILS.pop(key, None)
+    return hits
+
+
+def _is_locked(ip, email):
+    return len(_recent(("acct", ip, email))) >= _MAX_PER_ACCOUNT or len(_recent(("ip", ip))) >= _MAX_PER_IP
+
+
+def _record_failure(ip, email):
+    now = time.time()
+    _FAILS.setdefault(("acct", ip, email), []).append(now)
+    _FAILS.setdefault(("ip", ip), []).append(now)
+    if len(_FAILS) > 5000:                      # keep memory bounded
+        for k in list(_FAILS):
+            _recent(k)
+
 
 def _is_safe_next_url(target):
     """Only allow redirecting to a path on this same site (blocks open redirect)."""
@@ -25,19 +55,26 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+        email = form.email.data.lower().strip()
+        ip = request.remote_addr or "?"
+        if _is_locked(ip, email):
+            flash("Too many failed attempts. Please wait 15 minutes and try again.", "danger")
+            return render_template("auth/login.html", form=form), 429
+        user = User.query.filter_by(email=email).first()
         if user and user.check_password(form.password.data):
+            _FAILS.pop(("acct", ip, email), None)
             login_user(user)
             next_page = request.args.get("next")
             if not _is_safe_next_url(next_page):
                 next_page = None
             return redirect(next_page or home_url())
+        _record_failure(ip, email)
         flash("Invalid email or password.", "danger")
 
     return render_template("auth/login.html", form=form)
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()

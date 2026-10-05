@@ -247,10 +247,13 @@
     {% endif %}
 
     <div class="sidebar-footer">
-      <a class="nav-item" href="{{ url_for('auth.logout') }}" style="margin:0;">
+      <form method="POST" action="{{ url_for('auth.logout') }}" class="logout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="nav-item" style="margin:0;">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
         <span class="nav-label">Logout</span>
-      </a>
+      </button>
+      </form>
     </div>
   </aside>
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
@@ -335,10 +338,13 @@
             </a>
             {% endif %}
             <div class="user-sep"></div>
-            <a class="user-item" role="menuitem" href="{{ url_for('auth.logout') }}">
+            <form method="POST" action="{{ url_for('auth.logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="user-item" role="menuitem">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
               Log Out
-            </a>
+            </button>
+            </form>
           </div>
         </div>
       </div>

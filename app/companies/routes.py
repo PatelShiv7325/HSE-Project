@@ -2,7 +2,7 @@ from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
-from app.utils import get_per_page
+from app.utils import get_per_page, admin_required
 from app.models import Company, InspectionReport
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/companies")
@@ -144,6 +144,7 @@ def _save_company(company):
 
 @companies_bp.route("/<int:company_id>/delete", methods=["POST"])
 @login_required
+@admin_required
 def delete_company(company_id):
     company = Company.query.get_or_404(company_id)
     db.session.delete(company)
@@ -194,6 +195,7 @@ def company_reports(company_id):
 
 @companies_bp.route("/reports/bulk-delete", methods=["POST"])
 @login_required
+@admin_required
 def bulk_delete_reports():
     """Deletes several InspectionReport rows at once from the company report
     view's bulk-action checkboxes, then returns to that company's page."""

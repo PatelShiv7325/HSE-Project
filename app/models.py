@@ -5,6 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 
 
+from app.security import EncryptedString
+
 class Role(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
@@ -222,7 +224,7 @@ class DishCase(db.Model):
     # file_upload_pending, internal_qc_pending, company_approval_pending, qc_rejected, company_rejected, done
 
     map_portal_id = db.Column(db.String(120))
-    map_portal_password = db.Column(db.String(120))
+    map_portal_password = db.Column(EncryptedString)      # stored encrypted (see app/security.py)
     map_application_status = db.Column(db.String(20), default="online_pending")  # online_pending, offline_pending, submitted
 
     liaisoning_status = db.Column(db.String(30), default="regional_forward_pending")
@@ -236,7 +238,7 @@ class DishCase(db.Model):
 
     license_type = db.Column(db.String(10))  # new, renew
     license_portal_id = db.Column(db.String(120))
-    license_portal_password = db.Column(db.String(120))
+    license_portal_password = db.Column(EncryptedString)  # stored encrypted
     license_status = db.Column(db.String(20), default="online_pending")  # online_pending, submitted
 
     liaisoning_license_status = db.Column(db.String(30), default="regional_forward_pending")

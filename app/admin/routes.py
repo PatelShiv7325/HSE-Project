@@ -21,7 +21,8 @@ from app.models import (
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
-from app.utils import admin_required   # shared version (sends non-admins to their todo list, no redirect loop)
+from app.utils import admin_required
+from app.uploads import save_upload   # shared version (sends non-admins to their todo list, no redirect loop)
 
 
 @admin_bp.route("/dashboard")
@@ -448,12 +449,12 @@ def create_user():
     is_admin = bool(request.form.get("is_admin"))
     salary = request.form.get("salary") or 0
 
-    if User.query.filter_by(email=email).first():
-        flash("A user with that email already exists.", "danger")
-        return redirect(url_for("admin.users"))
-
     if not name or not email:
         flash("Name and email are required.", "danger")
+        return redirect(url_for("admin.users"))
+
+    if User.query.filter(db.func.lower(User.email) == email).first():
+        flash(f"A user with the email {email} already exists.", "danger")
         return redirect(url_for("admin.users"))
     import secrets as _secrets
     plain_password = password or _secrets.token_urlsafe(9)   # random, not a guessable default
@@ -558,11 +559,7 @@ def update_config(config_id):
     if setting.field_type == "file":
         file = request.files.get("file")
         if file and file.filename:
-            upload_dir = os.path.join(current_app.root_path, "static", "uploads", "config")
-            os.makedirs(upload_dir, exist_ok=True)
-            filename = secure_filename(f"config_{setting.id}_{file.filename}")
-            file.save(os.path.join(upload_dir, filename))
-            setting.file_path = filename
+            setting.file_path = save_upload(file, "config", f"config_{setting.id}_")
     else:
         setting.value = request.form.get("value")
     db.session.commit()
@@ -591,14 +588,7 @@ def _ensure_default_config_rows():
 def _save_engineer_photo(photo):
     """Saves an uploaded engineer photo under static/uploads/engineers and
     returns the stored filename, or None if no file was uploaded."""
-    if not photo or not photo.filename:
-        return None
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "engineers")
-    os.makedirs(upload_dir, exist_ok=True)
-    filename = secure_filename(photo.filename)
-    stored_name = f"{uuid4().hex}_{filename}"
-    photo.save(os.path.join(upload_dir, stored_name))
-    return stored_name
+    return save_upload(photo, "engineers")
 
 
 def _parse_license_expiry(value):
@@ -724,14 +714,7 @@ def _save_company_asset(file_obj, tag):
     """Saves an uploaded logo/signature/stamp image under
     static/uploads/company and returns the stored filename, or None if no
     file was uploaded."""
-    if not file_obj or not file_obj.filename:
-        return None
-    upload_dir = os.path.join(current_app.root_path, "static", "uploads", "company")
-    os.makedirs(upload_dir, exist_ok=True)
-    filename = secure_filename(file_obj.filename)
-    stored_name = f"{tag}_{uuid4().hex}_{filename}"
-    file_obj.save(os.path.join(upload_dir, stored_name))
-    return stored_name
+    return save_upload(file_obj, "company", f"{tag}_")
 
 
 def _backups_dir():
