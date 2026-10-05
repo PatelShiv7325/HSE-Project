@@ -170,128 +170,24 @@ def create_app():
 
 
 def _ensure_schema_upgrades():
-    """
-    Adds columns to EXISTING tables that db.create_all() can't add on its own
-    -- create_all() only creates tables that don't exist yet, it never alters
-    a table that's already there. This runs on every app startup, checks
-    which columns are missing on each table below, and adds them with a raw
-    ALTER TABLE if needed. Safe to run every time; does nothing once the
-    columns already exist. Brand new tables (like ConfigSetting) don't need
-    an entry here -- db.create_all() already creates those automatically.
-
-    This replaces the old one-off migrate_add_salary.py / migrate_add_from_month.py
-    scripts -- there's no separate migration file to remember to run anymore.
-
-    Add a new "table_name": {...} entry any time a future field gets added
-    to a table that may already have rows in it.
-
-    IMPORTANT: this talks to `db.engine` (whatever SQLALCHEMY_DATABASE_URI
-    actually is -- SQLite locally, PostgreSQL on Render) via SQLAlchemy's
-    own dialect-agnostic inspector, instead of hardcoding a raw sqlite3
-    connection to a local hse.db file. The old sqlite3-only version silently
-    no-op'd on any deploy using Postgres (the file it looked for simply
-    doesn't exist in that container), which meant company_id/renewed_from_id
-    never actually got added to the live Postgres table -- every page that
-    queried InspectionReport then 500'd with "column ... does not exist".
-    """
+    """Add any column that exists in a model but not yet in the real DB table."""
     from sqlalchemy import inspect, text
-
-    # table name -> { new column name: SQL column definition }
-    tables_to_upgrade = {
-        "user": {
-            "salary": "NUMERIC(12, 2) DEFAULT 0",
-            "from_month": "VARCHAR(7)",
-        },
-        "message_template": {
-            "title": "VARCHAR(150)",
-            "category": "VARCHAR(80) DEFAULT 'General'",
-            "status": "VARCHAR(20) DEFAULT 'active'",
-        },
-        "engineer": {
-            "designation": "VARCHAR(80)",
-            "license_number": "VARCHAR(80)",
-            "license_expiry_date": "DATE",
-            "photo_filename": "VARCHAR(255)",
-        },
-        "whats_app_log": {
-            "lead_id": "INTEGER",
-            "trigger_source": "VARCHAR(255)",
-            "triggered_by": "VARCHAR(120)",
-            "attachment_filename": "VARCHAR(255)",
-        },
-        "inspection_report": {
-            "company_id": "INTEGER",
-            "renewed_from_id": "INTEGER",
-        },
-        # This "dish_case" table (DISH workflow tracking) had columns added
-        # to its model over time that were never added here -- every column
-        # below is listed so any older local/production copy of this table
-        # gets fully caught up in one pass, regardless of which columns it's
-        # missing.
-        "dish_case": {
-            "map_status": "VARCHAR(30) DEFAULT 'new'",
-            "documentation_user_id": "INTEGER",
-            "stability_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "drafting_deadline": "DATE",
-            "online_application_user_id": "INTEGER",
-            "liaisoning_map_user_id": "INTEGER",
-            "license_user_id": "INTEGER",
-            "liaisoning_license_user_id": "INTEGER",
-            "form_status": "VARCHAR(20) DEFAULT 'pending'",
-            "drafting_status": "VARCHAR(30) DEFAULT 'file_upload_pending'",
-            "map_portal_id": "VARCHAR(120)",
-            "map_portal_password": "VARCHAR(120)",
-            "map_application_status": "VARCHAR(20) DEFAULT 'online_pending'",
-            "liaisoning_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
-            "stability_type": "VARCHAR(10)",
-            "stability_status": "VARCHAR(20) DEFAULT 'pending'",
-            "stability_structure_filename": "VARCHAR(255)",
-            "stability_certificate_filename": "VARCHAR(255)",
-            "stability_review_sent_at": "TIMESTAMP",
-            "license_type": "VARCHAR(10)",
-            "license_portal_id": "VARCHAR(120)",
-            "license_portal_password": "VARCHAR(120)",
-            "license_status": "VARCHAR(20) DEFAULT 'online_pending'",
-            "liaisoning_license_status": "VARCHAR(30) DEFAULT 'regional_forward_pending'",
-            "drafting_file_filename": "VARCHAR(255)",
-        },
-        # Same drift risk as dish_case above -- BAUDA/GIDC/TPO didn't have
-        # this problem yet, but listing every column now means they never
-        # will, even as these models grow.
-        "bauda_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "form_status": "VARCHAR(20) DEFAULT 'pending'",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
-            "approved_status": "VARCHAR(20) DEFAULT 'pending'",
-        },
-        "gidc_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
-        },
-        "tpo_case": {
-            "documentation_user_id": "INTEGER",
-            "drawing_user_id": "INTEGER",
-            "drafting_user_id": "INTEGER",
-            "drafting_status": "VARCHAR(30) DEFAULT 'pending'",
-        },
-    }
 
     inspector = inspect(db.engine)
     existing_tables = set(inspector.get_table_names())
+    dialect = db.engine.dialect
 
     with db.engine.begin() as conn:
-        for table_name, columns in tables_to_upgrade.items():
-            # Skip tables that don't exist yet -- nothing to upgrade on them
-            if table_name not in existing_tables:
-                continue
+        for table in db.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all() already handled brand-new tables
+            existing_cols = {c["name"] for c in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing_cols:
+                    continue
+                col_type = col.type.compile(dialect=dialect)
+                conn.execute(text(
+                    f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'
+                ))
+                print(f"[schema upgrade] added {table.name}.{col.name}", flush=True)
 
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
-
-            for column_name, column_def in columns.items():
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
