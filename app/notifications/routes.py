@@ -4,6 +4,7 @@ import urllib.request
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
+from app.utils import admin_required
 from app.models import WhatsAppLog, Lead, MessageTemplate, ConfigSetting, EmailLog, Notification
 from datetime import datetime, timedelta
 from email_service import get_smtp_settings, save_smtp_settings, send_email
@@ -56,6 +57,7 @@ def _check_evolution_connection(api_url, api_key, instance_name):
 
 @notifications_bp.route("/whatsapp-link", methods=["GET"])
 @login_required
+@admin_required
 def whatsapp_link():
     return render_template(
         "notifications/whatsapp_link.html",
@@ -72,10 +74,16 @@ def whatsapp_link():
 # the real current state right after saving.
 @notifications_bp.route("/whatsapp-link/save", methods=["POST"])
 @login_required
+@admin_required
 def whatsapp_link_save():
     api_url = request.form.get("api_url", "").strip()
     api_key = request.form.get("api_key", "").strip()
     instance_name = request.form.get("instance_name", "").strip()
+
+    # The server will call this URL, so only accept normal http(s) addresses (blocks file:// etc.)
+    if api_url and not api_url.lower().startswith(("http://", "https://")):
+        flash("API URL must start with http:// or https://", "danger")
+        return redirect(url_for("notifications.whatsapp_link"))
 
     _set_setting("whatsapp_api_url", api_url, "Evolution API URL")
     _set_setting("whatsapp_api_key", api_key, "Evolution API Key")
@@ -96,6 +104,7 @@ def whatsapp_link_save():
 # then always clears the locally stored connected state either way.
 @notifications_bp.route("/whatsapp-link/disconnect", methods=["POST"])
 @login_required
+@admin_required
 def whatsapp_link_disconnect():
     api_url = _get_setting("whatsapp_api_url")
     api_key = _get_setting("whatsapp_api_key")
@@ -118,6 +127,7 @@ def whatsapp_link_disconnect():
 
 @notifications_bp.route("/whatsapp-logs")
 @login_required
+@admin_required
 def whatsapp_logs():
     search = request.args.get("q", "").strip()
     status_filter = request.args.get("status", "")
@@ -177,6 +187,7 @@ def whatsapp_logs():
 
 @notifications_bp.route("/message-format", methods=["GET", "POST"])
 @login_required
+@admin_required
 def message_format():
     if request.method == "POST":
         key = request.form.get("key", "").strip()
@@ -229,6 +240,7 @@ def message_format():
 
 @notifications_bp.route("/email-settings", methods=["GET"])
 @login_required
+@admin_required
 def email_settings():
     settings = get_smtp_settings()
     recent_logs = EmailLog.query.order_by(EmailLog.sent_at.desc()).limit(15).all()
@@ -241,6 +253,7 @@ def email_settings():
 
 @notifications_bp.route("/email-settings/save", methods=["POST"])
 @login_required
+@admin_required
 def email_settings_save():
     save_smtp_settings(
         host=request.form.get("host", "").strip(),
@@ -260,6 +273,7 @@ def email_settings_save():
 # can confirm the SMTP settings actually work before relying on them.
 @notifications_bp.route("/email-settings/test", methods=["POST"])
 @login_required
+@admin_required
 def email_settings_test():
     ok = send_email(
         current_user.email,

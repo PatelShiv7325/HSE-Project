@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
 from flask_login import login_required, current_user
 from app import db
+from app.utils import get_per_page
 from app.models import InspectionReport, Company, CompanyProfile
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -362,7 +363,7 @@ def previous_reports(form_type):
 @login_required
 def form9_list():
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = InspectionReport.query.filter_by(form_type="form9")
@@ -1210,7 +1211,7 @@ def renumber_old_reports():
 @login_required
 def generic_list(form_type):
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = InspectionReport.query.filter_by(form_type=form_type)

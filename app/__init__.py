@@ -102,7 +102,16 @@ def create_app():
     app.register_blueprint(accounts_bp)
     app.register_blueprint(companies_bp)
 
-    csrf.exempt(api_bp)
+    # NOTE: api_bp is no longer CSRF-exempt -- it uses the logged-in session cookie, so exempting
+    # it let any other website change task status on a user's behalf. Fetch calls must send
+    # the X-CSRFToken header (base.html already exposes the token in <meta name="csrf-token">).
+
+    @app.after_request
+    def _security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return resp
 
     @app.route("/")
     def index():
@@ -111,13 +120,20 @@ def create_app():
         # to the dashboard if they're already signed in.
         from flask import redirect, url_for
         from flask_login import current_user
+        from app.utils import home_url
         if current_user.is_authenticated:
-            return redirect(url_for("admin.dashboard"))
+            return redirect(home_url())
         return redirect(url_for("auth.login"))
 
     @app.context_processor
     def inject_company():
+        import os as _os
+        try:   # changes automatically whenever theme.css is edited -> no more stale CSS after deploys
+            css_version = int(_os.path.getmtime(_os.path.join(app.static_folder, "css", "theme.css")))
+        except OSError:
+            css_version = 1
         return {
+            "css_version": css_version,
             "company_name": app.config["COMPANY_NAME"],
             "company_tagline": app.config["COMPANY_TAGLINE"],
         }
@@ -143,7 +159,7 @@ def create_app():
 
         return {
             "nav_counts": {
-                "new_lead": Lead.query.filter_by(status="new").count(),
+                "new_lead": Lead.query.filter_by(status="new_lead").count(),
                 "estimation": Estimation.query.filter_by(status="pending").count(),
                 "site_visit": SiteVisit.query.filter_by(status="pending").count(),
                 "assign_measurement": Measurement.query.filter_by(status="pending").count(),

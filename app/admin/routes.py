@@ -21,21 +21,12 @@ from app.models import (
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
-def admin_required(fn):
-    from functools import wraps
-
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_admin:
-            flash("Admin access required.", "danger")
-            return redirect(url_for("auth.login"))
-        return fn(*args, **kwargs)
-
-    return wrapper
+from app.utils import admin_required   # shared version (sends non-admins to their todo list, no redirect loop)
 
 
 @admin_bp.route("/dashboard")
 @login_required
+@admin_required
 def dashboard():
     now = datetime.utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -258,6 +249,7 @@ def work_dashboard():
 
 @admin_bp.route("/dashboard/employee")
 @login_required
+@admin_required
 def employee_dashboard():
     employees = User.query.filter(User.is_admin == False).all()
     selected_id = request.args.get("user_id", type=int)
@@ -290,6 +282,7 @@ def _month_bucket(column):
 
 @admin_bp.route("/dashboard/chart-data")
 @login_required
+@admin_required
 def chart_data():
     now = datetime.utcnow()
     twelve_months_ago = now - timedelta(days=365)
@@ -459,7 +452,11 @@ def create_user():
         flash("A user with that email already exists.", "danger")
         return redirect(url_for("admin.users"))
 
-    plain_password = password or "changeme123"
+    if not name or not email:
+        flash("Name and email are required.", "danger")
+        return redirect(url_for("admin.users"))
+    import secrets as _secrets
+    plain_password = password or _secrets.token_urlsafe(9)   # random, not a guessable default
     user = User(name=name, email=email, role_id=role_id, is_admin=is_admin, salary=salary)
     user.set_password(plain_password)
     db.session.add(user)
@@ -496,9 +493,16 @@ def delete_user(user_id):
         flash("Can't remove the last remaining admin.", "danger")
         return redirect(url_for("admin.users"))
 
-    db.session.delete(user)
-    db.session.commit()
-    flash(f"{user.name} removed.", "success")
+    name = user.name
+    try:
+        db.session.delete(user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash(f"{name} can't be deleted because tasks, cases or reports still reference this user. "
+              "Reassign their work first.", "danger")
+        return redirect(url_for("admin.users"))
+    flash(f"{name} removed.", "success")
     return redirect(url_for("admin.users"))
 
 

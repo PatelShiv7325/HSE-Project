@@ -1,4 +1,6 @@
 """Run once after first install: python seed.py"""
+import os
+import secrets
 from app import create_app, db
 from app.models import User, Role, Department
 
@@ -25,10 +27,11 @@ with app.app_context():
     admin_email = "admin@globalhse.com"
     if not User.query.filter_by(email=admin_email).first():
         admin = User(name="Admin", email=admin_email, is_admin=True)
-        admin.set_password("admin123")
+        admin_password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
+        admin.set_password(admin_password)
         db.session.add(admin)
         db.session.commit()
-        print(f"Created admin user: {admin_email} / admin123  (change this password immediately)")
+        print(f"Created admin user: {admin_email} / {admin_password}  (shown once -- change it after first login)")
     else:
         print("Admin user already exists.")
 

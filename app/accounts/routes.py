@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
+from app.utils import get_per_page
 from app.models import Payment, Lead
 
 accounts_bp = Blueprint("accounts", __name__, url_prefix="/accounts")
@@ -9,7 +10,7 @@ accounts_bp = Blueprint("accounts", __name__, url_prefix="/accounts")
 def _payments_view(base_query, title):
     status_filter = request.args.get("status", "")
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = base_query.join(Lead, Payment.lead_id == Lead.id)
@@ -66,7 +67,11 @@ def update_payment(payment_id):
     p.status = request.form.get("status") or p.status
     pct = request.form.get("paid_percentage")
     if pct:
-        p.paid_percentage = min(100, max(0, int(pct)))
+        try:
+            p.paid_percentage = min(100, max(0, int(pct)))
+        except ValueError:
+            flash("Paid percentage must be a number.", "danger")
+            return redirect(request.referrer or url_for("accounts.payments"))
     db.session.commit()
     flash("Payment updated.", "success")
     return redirect(request.referrer or url_for("accounts.payments"))

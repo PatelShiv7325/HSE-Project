@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
+from app.utils import get_per_page
 from app.models import Lead, Estimation, Department, WorkStage, Payment
 from app.notify import notify, admin_users, nice_date
 
@@ -33,7 +34,7 @@ def leads():
     dept_filter = request.args.get("department", "")
     status_filter = request.args.get("status", "")
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = Lead.query
@@ -132,7 +133,7 @@ def delete_lead(lead_id):
 def estimation():
     status_filter = request.args.get("status", "")
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = Estimation.query.join(Lead, Estimation.lead_id == Lead.id)

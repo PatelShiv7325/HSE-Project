@@ -8,6 +8,7 @@ from flask import (
 from flask_login import login_required
 from werkzeug.utils import secure_filename
 from app import db
+from app.utils import get_per_page
 from app.models import DishCase, DishDocument, DishApplication, Lead, User, SiteVisit
 from app.notify import notify, admin_users
 
@@ -167,7 +168,7 @@ def update_assignment(case_id):
 def form():
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -347,7 +348,7 @@ def _save_drafting_file(file_obj, case_id):
 def drafting():
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -580,7 +581,7 @@ LIAISONING_PROGRESSION = {
 def applications():
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -628,7 +629,7 @@ def mark_application_submitted(case_id):
 def liaisoning_applications():
     search = request.args.get("q", "").strip()
     status_filter = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -711,7 +712,7 @@ def _save_stability_file(file_obj, case_id, tag):
 def certificates():
     search = request.args.get("q", "").strip()
     status_filter = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -826,7 +827,7 @@ def certificate_send_review(case_id):
 def license_page():
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)
@@ -908,7 +909,7 @@ LIAISONING_LICENSE_NEXT = {
 def liaisoning_license():
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = DishCase.query.join(Lead, DishCase.lead_id == Lead.id)

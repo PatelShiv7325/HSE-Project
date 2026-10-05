@@ -2,6 +2,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
+from app.utils import get_per_page
 from app.models import WorkStage, Lead, User
 
 workflow_bp = Blueprint("workflow", __name__, url_prefix="/workflow")
@@ -12,7 +13,7 @@ workflow_bp = Blueprint("workflow", __name__, url_prefix="/workflow")
 def todo():
     show = request.args.get("show", "pending")
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
 
     query = WorkStage.query
@@ -60,6 +61,9 @@ def todo():
 @login_required
 def start_work(stage_id):
     stage = WorkStage.query.get_or_404(stage_id)
+    if not current_user.is_admin and stage.assigned_to_id != current_user.id:
+        flash("You can only update tasks assigned to you.", "danger")
+        return redirect(request.referrer or url_for("workflow.todo"))
     stage.status = "in_progress"
     db.session.commit()
     flash("Work started.", "success")
@@ -70,6 +74,9 @@ def start_work(stage_id):
 @login_required
 def complete_work(stage_id):
     stage = WorkStage.query.get_or_404(stage_id)
+    if not current_user.is_admin and stage.assigned_to_id != current_user.id:
+        flash("You can only update tasks assigned to you.", "danger")
+        return redirect(request.referrer or url_for("workflow.todo"))
     stage.status = "done"
     stage.completed_at = datetime.utcnow()
     db.session.commit()

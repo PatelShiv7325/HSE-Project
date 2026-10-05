@@ -5,6 +5,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.auth.forms import LoginForm
 from app.models import User
+from app.utils import home_url
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -20,7 +21,7 @@ def _is_safe_next_url(target):
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("admin.dashboard"))
+        return redirect(home_url())
 
     form = LoginForm()
     if form.validate_on_submit():
@@ -30,7 +31,7 @@ def login():
             next_page = request.args.get("next")
             if not _is_safe_next_url(next_page):
                 next_page = None
-            return redirect(next_page or url_for("admin.dashboard"))
+            return redirect(next_page or home_url())
         flash("Invalid email or password.", "danger")
 
     return render_template("auth/login.html", form=form)
@@ -147,8 +148,8 @@ def change_password():
     if not current_user.check_password(current_password):
         flash("Current password is incorrect.", "danger")
         return redirect(url_for("auth.profile"))
-    if len(new_password) < 6:
-        flash("New password must be at least 6 characters.", "danger")
+    if len(new_password) < 8:
+        flash("New password must be at least 8 characters.", "danger")
         return redirect(url_for("auth.profile"))
     if new_password != confirm_password:
         flash("New password and confirmation do not match.", "danger")

@@ -2,6 +2,7 @@ from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app import db
+from app.utils import get_per_page
 from app.models import Company, InspectionReport
 
 companies_bp = Blueprint("companies", __name__, url_prefix="/companies")
@@ -46,7 +47,7 @@ SORT_COLUMNS = {
 @login_required
 def list_companies():
     search = request.args.get("q", "").strip()
-    per_page = request.args.get("per_page", 10, type=int)
+    per_page = get_per_page()
     page = request.args.get("page", 1, type=int)
     sort = request.args.get("sort", "name")
     direction = request.args.get("dir", "asc")
@@ -163,7 +164,7 @@ def company_reports(company_id):
     query = InspectionReport.query.filter_by(company_id=company.id)
     if search:
         query = query.filter(InspectionReport.report_no.ilike(f"%{search}%"))
-    if year:
+    if year.isdigit():
         query = query.filter(db.extract("year", InspectionReport.report_date) == int(year))
     if form_type:
         query = query.filter_by(form_type=form_type)

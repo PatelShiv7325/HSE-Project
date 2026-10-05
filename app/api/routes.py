@@ -17,6 +17,8 @@ def update_progress(stage_id):
 
     data = request.get_json() or {}
     status = data.get("status")
+    if status and status not in ("pending", "in_progress", "done"):
+        return jsonify({"error": "invalid status"}), 400
     if status:
         stage.status = status
         if status == "done":

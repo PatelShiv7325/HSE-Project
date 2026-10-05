@@ -31,6 +31,7 @@
   --text: #101828;
   --text-muted: #64748B;
   --text-faint: #98A2B3;
+  --text-label: #6B7280;   /* form labels: 4.8:1 contrast on white (old #A1A1AA was 2.6:1 = hard to read) */
 
   /* Layout */
   --sidebar-width: 252px;
@@ -508,12 +509,12 @@ table.dataTable thead th {
   padding: 16px; margin-bottom: 16px;
   background: #fff; border: 2px solid #e5e7eb; border-radius: 6px;
 }
-.ref-page-head h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #18181b; line-height: 1.15; }
+.ref-page-head h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); line-height: 1.15; }
 .ref-page-head .ref-sub { margin-top: 4px; font-size: 13px; color: #71717a; }
 .ref-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 .ref-form .ref-card {
-  background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+  background: #fff; border: 1px solid var(--border); border-radius: 6px;
   margin: 0 0 16px; padding: 0 0 20px; overflow: hidden; break-inside: avoid;
 }
 .ref-card-head {
@@ -521,9 +522,9 @@ table.dataTable thead th {
   padding: 12px 16px; margin-bottom: 16px;
   background: rgba(249, 250, 251, 0.6); border-bottom: 1px solid #f4f4f5;
 }
-.ref-card-head::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #1b3db8; }
+.ref-card-head::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
 .ref-card-head h4 {
-  margin: 0; font-size: 10px; font-weight: 900; color: #18181b;
+  margin: 0; font-size: 11px; font-weight: 800; color: var(--text);
   text-transform: uppercase; letter-spacing: 0.15em;
 }
 .ref-card-body { padding: 0 20px; }
@@ -535,24 +536,24 @@ table.dataTable thead th {
 
 .ref-form label {
   display: block; margin: 0 0 6px 2px;
-  font-size: 10px; font-weight: 700; color: #a1a1aa;
+  font-size: 11px; font-weight: 700; color: var(--text-label);
   text-transform: uppercase; letter-spacing: 0.1em;
 }
 .ref-form input[type="text"], .ref-form input[type="date"], .ref-form input[type="number"],
 .ref-form input[type="email"], .ref-form select, .ref-form textarea {
   width: 100%; box-sizing: border-box; height: 40px; padding: 0 14px;
-  border: 1px solid #e4e4e7; border-radius: 6px;
-  background: rgba(249, 250, 251, 0.6); color: #18181b;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: rgba(249, 250, 251, 0.6); color: var(--text);
   font: inherit; font-size: 14px; font-weight: 600;
   transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
 }
 .ref-form textarea { height: auto; padding: 10px 14px; line-height: 1.5; resize: vertical; }
-.ref-form input::placeholder, .ref-form textarea::placeholder { color: #a1a1aa; font-weight: 400; }
+.ref-form input::placeholder, .ref-form textarea::placeholder { color: var(--text-faint); font-weight: 400; }
 .ref-form input:focus, .ref-form select:focus, .ref-form textarea:focus {
-  outline: none; border-color: #1b3db8; box-shadow: 0 0 0 1px #1b3db8; background: #fff;
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: #fff;
 }
 .ref-form .unit-box input { padding-right: 62px; }
-.ref-form .unit-tag { background: rgba(244, 244, 245, 0.8); color: #52525b; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-left: 1px solid #e4e4e7; }
+.ref-form .unit-tag { background: rgba(244, 244, 245, 0.8); color: #52525b; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-left: 1px solid var(--border); }
 
 .ref-form .btn {
   height: 40px; padding: 0 20px; border-radius: 6px;
@@ -560,36 +561,36 @@ table.dataTable thead th {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
   text-decoration: none; white-space: nowrap;
 }
-.ref-form .btn-primary { background: #1b3db8; border: 1px solid #1b3db8; color: #fff; }
-.ref-form .btn-primary:hover { background: #16329a; border-color: #16329a; }
-.ref-form .btn-outline { background: #fff; border: 1px solid #e4e4e7; color: #18181b; }
+.ref-form .btn-primary { background: var(--primary); border: 1px solid var(--primary); color: #fff; }
+.ref-form .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.ref-form .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
 .ref-form .btn-outline:hover { background: #fafafa; }
 .ref-page-head .btn { height: 40px; padding: 0 18px; border-radius: 6px; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
-.ref-page-head .btn-outline { background: #fff; border: 1px solid #e4e4e7; color: #18181b; }
+.ref-page-head .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
 .ref-page-head .btn-outline:hover { background: #fafafa; }
 
 .ref-check { display: flex !important; align-items: center; gap: 10px; margin: 0 !important; cursor: pointer;
   text-transform: none !important; letter-spacing: 0 !important; font-size: 13px !important; font-weight: 600 !important; color: #3f3f46 !important; }
-.ref-check input { width: 16px; height: 16px; accent-color: #1b3db8; }
+.ref-check input { width: 16px; height: 16px; accent-color: var(--primary); }
 .ref-footer { margin: 4px 0 24px; }
 
 /* Form 9 (older layout): style its plain <h4> + grid blocks like cards */
 .ref-form.ref-legacy > h4 {
   margin: 0; padding: 12px 16px; background: rgba(249, 250, 251, 0.6);
-  border: 1px solid #e4e4e7; border-bottom: 1px solid #f4f4f5; border-radius: 6px 6px 0 0;
-  font-size: 10px; font-weight: 900; color: #18181b; text-transform: uppercase; letter-spacing: 0.15em;
+  border: 1px solid var(--border); border-bottom: 1px solid #f4f4f5; border-radius: 6px 6px 0 0;
+  font-size: 11px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.15em;
 }
 .ref-form.ref-legacy > h4 + div[style*="display:grid"],
 .ref-form.ref-legacy > h4 + .ref-note + div[style*="display:grid"] {
-  background: #fff; border: 1px solid #e4e4e7; border-top: 0; border-radius: 0 0 6px 6px;
+  background: #fff; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 6px 6px;
   padding: 20px !important; margin-bottom: 16px !important; gap: 16px !important;
 }
 
 /* helper note sitting between a legacy <h4> and its grid: part of the card, no overlap */
 .ref-form.ref-legacy > h4 + .ref-note {
   margin: 0; padding: 14px 20px 0; font-size: 12.5px; line-height: 1.4;
-  background: #fff; border: 1px solid #e4e4e7; border-top: 0; border-bottom: 0;
+  background: #fff; border: 1px solid var(--border); border-top: 0; border-bottom: 0;
 }
 .ref-form.ref-legacy > h4 + .ref-note + div[style*="display:grid"] { padding-top: 14px !important; }
 
