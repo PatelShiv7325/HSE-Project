@@ -2,18 +2,21 @@
 {% block breadcrumb_parent %}Inspections{% endblock %}
 {% block breadcrumb_title %}{{ 'Edit' if report else 'New' }} Form 9{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="toolbar">
-    <h4 style="margin:0;">{{ 'Edit Form 9 Report' if report else 'New Form 9 Report (Hoist / Lift Examination)' }}</h4>
-    <div style="display:flex; gap:8px;">
-      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous Form Data</button>
-    <a href="{{ url_for('inspections.form9_list') }}" class="btn btn-outline">Back to List</a>
+<div class="ref-page">
+  <div class="ref-page-head">
+    <div>
+      <h1>{{ 'Edit Form 9 Report' if report else 'New Form 9 Report' }}</h1>
+      <div class="ref-sub">Hoist / Lift Examination. Fill in the details below.</div>
+    </div>
+    <div class="ref-actions">
+      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous</button>
+      <a href="{{ url_for('inspections.form9_list') }}" class="btn btn-outline">Back to List</a>
     </div>
   </div>
 
   {% set form_type = 'form9' %}
   {% include "inspections/_draft_autosave.html" %}
-  <form method="post">
+  <form method="post" class="ref-form ref-legacy">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <h4>Report Details</h4>

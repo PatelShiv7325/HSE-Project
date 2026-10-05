@@ -206,48 +206,10 @@ select:focus-visible, textarea:focus-visible {
 
 .content { padding: 24px 28px 40px; max-width: 1440px; }
 
-/* ---------- Sidebar navigation page-change animation ----------
-   This is a normal server-rendered app (each sidebar click is a full
-   page load), so the "transition" is two halves: the OLD page fades
-   itself out for a moment (via JS adding .page-leaving right before
-   navigating, in base.html), then every NEW page fades itself in
-   automatically on load via this animation -- no JS needed for that half. */
-.content { animation: pageFadeIn 0.28s ease; }
-
-.content.page-leaving {
-  opacity: 0;
-  transform: translateY(-6px);
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-@keyframes pageFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .content, .content.page-leaving { animation: none; transition: none; opacity: 1; transform: none; }
-}
-
-/* ---------- Native cross-document page transition (Chrome/Edge 126+, Safari 18+) ----------
-   Only applies in browsers that support the API AND when the visitor
-   hasn't asked for reduced motion; everyone else just gets the plain
-   instant page swap, which is already how browsers behave by default. */
-@media (prefers-reduced-motion: no-preference) {
-  ::view-transition-old(root) {
-    animation: 180ms ease both viewTransitionFadeOut;
-  }
-  ::view-transition-new(root) {
-    animation: 220ms ease both viewTransitionFadeIn;
-  }
-}
-
-@keyframes viewTransitionFadeOut {
-  to { opacity: 0; transform: translateY(-6px); }
-}
-@keyframes viewTransitionFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-}
+/* ---------- Page change: instant, like the reference app ----------
+   No fade-out / fade-in between pages. Only small button feedback. */
+button, .btn { transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .1s ease; }
+button:active:not(:disabled), .btn:active { transform: scale(0.98); }
 
 /* ---------- Tabs (Admin / Work / Employee Dashboard style) ---------- */
 .tab-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -481,4 +443,90 @@ table.dataTable thead th {
   .content { padding: 12px; }
   .topbar .breadcrumb strong { font-size: 16px; }
   .card { padding: 14px; }
+}
+
+/* =====================================================================
+   Reference-style forms (matches the DISH software look)
+   Used by inspections/generic_form.html and form9_form.html
+   ===================================================================== */
+.ref-page-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px; margin-bottom: 16px;
+  background: #fff; border: 2px solid #e5e7eb; border-radius: 6px;
+}
+.ref-page-head h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #18181b; line-height: 1.15; }
+.ref-page-head .ref-sub { margin-top: 4px; font-size: 13px; color: #71717a; }
+.ref-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.ref-form .ref-card {
+  background: #fff; border: 1px solid #e4e4e7; border-radius: 6px;
+  margin: 0 0 16px; padding: 0 0 20px; overflow: hidden; break-inside: avoid;
+}
+.ref-card-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 16px;
+  background: rgba(249, 250, 251, 0.6); border-bottom: 1px solid #f4f4f5;
+}
+.ref-card-head::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #1b3db8; }
+.ref-card-head h4 {
+  margin: 0; font-size: 10px; font-weight: 900; color: #18181b;
+  text-transform: uppercase; letter-spacing: 0.15em;
+}
+.ref-card-body { padding: 0 20px; }
+.ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+
+/* two-column masonry for the section cards, like the reference */
+.ref-columns { column-count: 1; column-gap: 16px; }
+@media (min-width: 1100px) { .ref-columns { column-count: 2; } }
+
+.ref-form label {
+  display: block; margin: 0 0 6px 2px;
+  font-size: 10px; font-weight: 700; color: #a1a1aa;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.ref-form input[type="text"], .ref-form input[type="date"], .ref-form input[type="number"],
+.ref-form input[type="email"], .ref-form select, .ref-form textarea {
+  width: 100%; box-sizing: border-box; height: 40px; padding: 0 14px;
+  border: 1px solid #e4e4e7; border-radius: 6px;
+  background: rgba(249, 250, 251, 0.6); color: #18181b;
+  font: inherit; font-size: 14px; font-weight: 600;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.ref-form textarea { height: auto; padding: 10px 14px; line-height: 1.5; resize: vertical; }
+.ref-form input::placeholder, .ref-form textarea::placeholder { color: #a1a1aa; font-weight: 400; }
+.ref-form input:focus, .ref-form select:focus, .ref-form textarea:focus {
+  outline: none; border-color: #1b3db8; box-shadow: 0 0 0 1px #1b3db8; background: #fff;
+}
+.ref-form .unit-box input { padding-right: 62px; }
+.ref-form .unit-tag { background: rgba(244, 244, 245, 0.8); color: #52525b; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-left: 1px solid #e4e4e7; }
+
+.ref-form .btn {
+  height: 40px; padding: 0 20px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  text-decoration: none; white-space: nowrap;
+}
+.ref-form .btn-primary { background: #1b3db8; border: 1px solid #1b3db8; color: #fff; }
+.ref-form .btn-primary:hover { background: #16329a; border-color: #16329a; }
+.ref-form .btn-outline { background: #fff; border: 1px solid #e4e4e7; color: #18181b; }
+.ref-form .btn-outline:hover { background: #fafafa; }
+.ref-page-head .btn { height: 40px; padding: 0 18px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.ref-page-head .btn-outline { background: #fff; border: 1px solid #e4e4e7; color: #18181b; }
+.ref-page-head .btn-outline:hover { background: #fafafa; }
+
+.ref-check { display: flex !important; align-items: center; gap: 10px; margin: 0 !important; cursor: pointer;
+  text-transform: none !important; letter-spacing: 0 !important; font-size: 13px !important; font-weight: 600 !important; color: #3f3f46 !important; }
+.ref-check input { width: 16px; height: 16px; accent-color: #1b3db8; }
+.ref-footer { margin: 4px 0 24px; }
+
+/* Form 9 (older layout): style its plain <h4> + grid blocks like cards */
+.ref-form.ref-legacy > h4 {
+  margin: 0; padding: 12px 16px; background: rgba(249, 250, 251, 0.6);
+  border: 1px solid #e4e4e7; border-bottom: 1px solid #f4f4f5; border-radius: 6px 6px 0 0;
+  font-size: 10px; font-weight: 900; color: #18181b; text-transform: uppercase; letter-spacing: 0.15em;
+}
+.ref-form.ref-legacy > h4 + div[style*="display:grid"] {
+  background: #fff; border: 1px solid #e4e4e7; border-top: 0; border-radius: 0 0 6px 6px;
+  padding: 20px !important; margin-bottom: 16px !important; gap: 16px !important;
 }

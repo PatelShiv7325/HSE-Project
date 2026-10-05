@@ -9,21 +9,25 @@
               background:#eef1f5; color:#44546a; font-size:12px; font-weight:600; border-left:1px solid #d5dbe3;
               border-radius:0 4px 4px 0; pointer-events:none; }
 </style>
-<div class="card">
-  <div class="toolbar">
-    <h4 style="margin:0;">{{ 'Edit' if report else 'New' }} {{ config.label }}</h4>
-    <div style="display:flex; gap:8px;">
-      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous Form Data</button>
-    <a href="{{ url_for('inspections.generic_list', form_type=form_type) }}" class="btn btn-outline">Back to List</a>
+<div class="ref-page">
+  <div class="ref-page-head">
+    <div>
+      <h1>{{ 'Edit' if report else 'New' }} {{ config.label }}</h1>
+      <div class="ref-sub">Fill in the details below. Fields marked * are required.</div>
+    </div>
+    <div class="ref-actions">
+      <button type="button" class="btn btn-outline" onclick="cpOpen()" title="Copy previous form data">&#128203; Copy Previous</button>
+      <a href="{{ url_for('inspections.generic_list', form_type=form_type) }}" class="btn btn-outline">Back to List</a>
     </div>
   </div>
 
   {% include "inspections/_draft_autosave.html" %}
-  <form method="post">
+  <form method="post" class="ref-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <h4>Report Details</h4>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+    <div class="ref-card">
+      <div class="ref-card-head"><h4>Report Identifiers</h4></div>
+      <div class="ref-card-body"><div class="ref-grid">
       <div style="grid-column:span 2;">
         <label style="display:block; margin-bottom:3px;">Company (optional - type to search, auto-fills occupier &amp; address below)</label>
         <input type="text" id="company_search" list="companies_datalist" autocomplete="off"
@@ -54,11 +58,14 @@
         <label style="display:block; margin-bottom:3px;">2) Address</label>
         <input type="text" id="address" name="address" value="{{ data.address or '' }}">
       </div>
-    </div>
+    </div></div></div>
 
+    <div class="ref-columns">
     {% for section_name, section_fields in config.sections %}
-    <h4>{{ section_name }}</h4>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+    <div class="ref-card">
+      <div class="ref-card-head"><h4>{{ section_name }}</h4></div>
+      <div class="ref-card-body">
+    <div class="ref-grid">
       {% set exam_keys = (config.exam_types or {}).keys()|list %}
       {% for key, label, input_type, default in section_fields %}
       {% set is_exam_extra = (key.endswith('_date') and key[:-5] in exam_keys) or (key.endswith('_comment') and key[:-8] in exam_keys) %}
@@ -113,15 +120,25 @@
       {% set cf_section_label = section_name %}
       {% include "inspections/_custom_fields.html" %}
     {% endif %}
+      </div>
+    </div>
     {% endfor %}
+    </div>
 
-    <label style="display:flex; align-items:center; gap:8px; margin:6px 0 18px; cursor:pointer;">
-      <input type="checkbox" name="show_sign_stamp" value="1" {{ 'checked' if data.get('show_sign_stamp') }}>
-      <span>Include Signature &amp; Stamp in PDF <small style="color:#777;">(images are uploaded under My Company)</small></span>
-    </label>
+    <div class="ref-card">
+      <div class="ref-card-head"><h4>PDF Options</h4></div>
+      <div class="ref-card-body">
+        <label class="ref-check">
+          <input type="checkbox" name="show_sign_stamp" value="1" {{ 'checked' if data.get('show_sign_stamp') }}>
+          <span>Include Signature &amp; Stamp in PDF <small style="color:#a1a1aa; font-weight:400;">(images are uploaded under My Company)</small></span>
+        </label>
+      </div>
+    </div>
 
-    <button class="btn btn-primary" type="submit">{{ 'Save Changes' if report else 'Create Report' }}</button>
-    <a class="btn btn-outline" href="{{ url_for('inspections.generic_list', form_type=form_type) }}">Cancel</a>
+    <div class="ref-actions ref-footer">
+      <button class="btn btn-primary" type="submit">{{ 'Save Changes' if report else 'Create Report' }}</button>
+      <a class="btn btn-outline" href="{{ url_for('inspections.generic_list', form_type=form_type) }}">Cancel</a>
+    </div>
   </form>
 </div>
 {% include "inspections/_copy_previous.html" %}

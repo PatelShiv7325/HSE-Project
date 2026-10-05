@@ -3,12 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Opts every same-origin navigation into the browser's native
-       Cross-Document View Transitions API (Chrome/Edge 126+, Safari 18+).
-       Supporting browsers cross-fade the old and new page with no blank
-       flash in between -- Firefox and older browsers just ignore this tag
-       and fall back to the manual JS fade in the script block below. -->
-  <meta name="view-transition" content="same-origin">
   <title>{% block title %}{{ company_name }}{% endblock %}</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo-icon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -329,43 +323,14 @@
     document.body.classList.toggle('sidebar-open', open);
   }
 
-  // Tapping a real nav link (not a collapsible group's <summary>) closes
-  // the sidebar automatically on mobile, so you land on the page instead
-  // of having to close the menu yourself first. It also plays a brief
-  // fade-out on the current page before the browser navigates away --
-  // the matching fade-IN on the page that loads next is pure CSS (see
-  // .content's animation in theme.css), so together it reads as one
-  // continuous page-change transition even though this is a normal
-  // full-page-reload app, not a single-page app.
+  // Tapping a real nav link closes the sidebar on mobile. Page changes are
+  // instant (no fade-out / fade-in), same as the reference DISH software.
   (function () {
     document.querySelectorAll('.sidebar a[href]').forEach(function (el) {
-      el.addEventListener('click', function (e) {
+      el.addEventListener('click', function () {
         if (window.matchMedia('(max-width: 900px)').matches) {
           toggleSidebar(false);
         }
-
-        // Skip the fade for: modified clicks (open in new tab/window),
-        // links that open a new tab, hash-only links, and clicking the
-        // link for the page you're already on.
-        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-        if (el.target === '_blank') return;
-        var href = el.getAttribute('href');
-        if (!href || href.charAt(0) === '#') return;
-        if (el.classList.contains('active')) return;
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-        // Browsers that support the native Cross-Document View Transitions
-        // API (see the <meta name="view-transition"> tag in <head>) handle
-        // the whole old-page/new-page cross-fade themselves, with no blank
-        // flash -- better than this manual version. Let those navigate
-        // normally and only run the manual fade-then-delay as a fallback
-        // for browsers that don't support it yet (e.g. Firefox).
-        if ("startViewTransition" in document) return;
-
-        e.preventDefault();
-        var content = document.querySelector('.content');
-        if (content) content.classList.add('page-leaving');
-        setTimeout(function () { window.location.href = href; }, 160);
       });
     });
   })();
