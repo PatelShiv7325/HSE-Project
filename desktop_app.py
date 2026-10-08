@@ -39,6 +39,7 @@ if not FROZEN:
 PORT = 5052        # was 5002 - the other (reference) HSE app also uses 5002, so they clashed
 PING_PATH = "/__globalhse_ping__"      # lets us tell OUR server apart from any other program on the port
 PING_TEXT = b"GLOBALHSE-MAIN-APP"
+LAST_HIT = [time.time()]   # time of the last request the server received
 LOCAL_URL = f"http://127.0.0.1:{PORT}/"
 
 APP_ROOT = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GlobalHSE")
@@ -78,6 +79,7 @@ def port_in_use(port=PORT):
 def with_ping(wsgi):
     """Wrap the Flask app so  /__globalhse_ping__  answers with our identity text."""
     def wrapped(environ, start_response):
+        LAST_HIT[0] = time.time()
         if environ.get("PATH_INFO") == PING_PATH:
             start_response("200 OK", [("Content-Type", "text/plain"),
                                       ("Content-Length", str(len(PING_TEXT)))])
@@ -222,7 +224,14 @@ def main():
             browser, f"--app={LOCAL_URL}", f"--user-data-dir={PROFILE_DIR}",
             "--window-size=1400,900", "--no-first-run", "--no-default-browser-check",
         ])
+        started = time.time()
         proc.wait()                                 # until the window is closed
+        if server is not None and time.time() - started < 15:
+            # Edge passed the window to an Edge that was already running with this profile and
+            # exited at once, but the window is still open. Keep the server alive until the page
+            # stops talking to it (it asks for notifications about every 30 seconds).
+            while time.time() - LAST_HIT[0] < 120:
+                time.sleep(5)
     else:
         webbrowser.open(LOCAL_URL)
         while server is not None:
