@@ -39,30 +39,6 @@ def _html_to_pdf_bytes(html, header_html=None, footer_html=None, fit_one_page=Fa
     import os
     import json
 
-    if getattr(sys, "frozen", False):
-        # Packaged desktop app: the PDF worker is this same .exe started with --pdf-worker.
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            in_path = os.path.join(tmp, "in.json")
-            out_path = os.path.join(tmp, "out.pdf")
-            with open(in_path, "w", encoding="utf-8") as f:
-                json.dump({"html": html, "header_html": header_html,
-                           "footer_html": footer_html, "fit_one_page": fit_one_page}, f)
-            try:
-                subprocess.run([sys.executable, "--pdf-worker", in_path, out_path],
-                               capture_output=True, timeout=90,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            except subprocess.TimeoutExpired:
-                raise RuntimeError("PDF export timed out -- try again.")
-            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-                with open(out_path, "rb") as f:
-                    return f.read()
-            error_text = ""
-            if os.path.exists(out_path + ".err"):
-                with open(out_path + ".err", encoding="utf-8") as f:
-                    error_text = f.read()
-            raise RuntimeError("PDF export failed: " + error_text.strip()[-500:])
-
     worker_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pdf_worker.py")
     payload = json.dumps({
         "html": html, "header_html": header_html, "footer_html": footer_html,

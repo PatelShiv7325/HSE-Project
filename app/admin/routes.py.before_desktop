@@ -718,8 +718,7 @@ def _save_company_asset(file_obj, tag):
 
 
 def _backups_dir():
-    base = current_app.config.get("DATA_DIR") or os.path.join(current_app.root_path, "..")
-    path = os.path.abspath(os.path.join(base, "backups"))
+    path = os.path.abspath(os.path.join(current_app.root_path, "..", "backups"))
     os.makedirs(path, exist_ok=True)
     return path
 

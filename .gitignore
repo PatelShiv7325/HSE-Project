@@ -14,3 +14,8 @@ backups/
 venv/
 
 uploads/
+
+dist/
+build/
+installer_output/
+*.spec

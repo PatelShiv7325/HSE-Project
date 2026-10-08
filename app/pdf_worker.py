@@ -21,15 +21,28 @@ def mm_to_px(mm):
     return mm / 25.4 * 96
 
 
-def main():
-    payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+def _launch_browser(p):
+    """Bundled Chromium first (as before). If it is not installed - e.g. the packaged
+    desktop app - fall back to the Microsoft Edge / Google Chrome already on the PC."""
+    try:
+        return p.chromium.launch()
+    except Exception as first_error:
+        for channel in ("msedge", "chrome"):
+            try:
+                return p.chromium.launch(channel=channel)
+            except Exception:
+                pass
+        raise first_error
+
+
+def render_pdf(payload):
     html = payload["html"]
     header_html = payload.get("header_html")
     footer_html = payload.get("footer_html")
     fit_one_page = payload.get("fit_one_page", False)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = _launch_browser(p)
         page = browser.new_page()
 
         # Render at the same width the printed content area will actually
@@ -86,7 +99,28 @@ def main():
         pdf_bytes = page.pdf(**pdf_kwargs)
         browser.close()
 
-    sys.stdout.buffer.write(pdf_bytes)
+    return pdf_bytes
+
+
+def main():
+    """Original mode: JSON in on stdin, PDF bytes out on stdout."""
+    payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    sys.stdout.buffer.write(render_pdf(payload))
+
+
+def run_files(in_path, out_path):
+    """Packaged-app mode: read JSON from a file, write the PDF to a file.
+    On failure the error text is written to <out_path>.err. Returns an exit code."""
+    try:
+        with open(in_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        with open(out_path, "wb") as f:
+            f.write(render_pdf(payload))
+        return 0
+    except Exception as exc:
+        with open(out_path + ".err", "w", encoding="utf-8") as f:
+            f.write(str(exc))
+        return 1
 
 
 if __name__ == "__main__":
