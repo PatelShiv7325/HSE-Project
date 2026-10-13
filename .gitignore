@@ -3,6 +3,8 @@ __pycache__/
 app_OLD_BACKUP/
 app_OLD_BACKUP_2/
 .env
+secret.key
+*.key
 hse.db
 .git_broken_backup/
 
@@ -10,12 +12,18 @@ hse.db
 backups/
 *.bak
 *.db
+*.before_desktop
+*.patch
 .venv/
 venv/
-
 uploads/
 
+# build output
 dist/
 build/
 installer_output/
 *.spec
+
+# tests / logs
+.pytest_cache/
+*.log

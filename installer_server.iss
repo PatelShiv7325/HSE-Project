@@ -25,6 +25,7 @@ Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "S
 
 [Files]
 Source: "dist\GlobalHSE-Server\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "hse.db"; DestDir: "{localappdata}\GlobalHSE\data"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [InstallDelete]
 Type: files; Name: "{autodesktop}\Global HSE Associates (Server).lnk"

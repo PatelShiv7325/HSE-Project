@@ -446,3 +446,12 @@ class Notification(db.Model):
     user = db.relationship(
         "User", backref=db.backref("notifications", cascade="all, delete-orphan")
     )
+
+
+class LoginAttempt(db.Model):
+    """One row per FAILED login. Stored in the database (not in memory) so the lockout is
+    shared by every gunicorn worker and survives restarts. Old rows are purged automatically."""
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(64), nullable=False, index=True)
+    email = db.Column(db.String(120), nullable=False, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)

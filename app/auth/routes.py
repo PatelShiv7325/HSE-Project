@@ -1,43 +1,43 @@
 import re
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, redirect, url_for, flash, request, Response, abort
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.auth.forms import LoginForm
-from app.models import User
+from app.models import User, LoginAttempt
 from app.utils import home_url
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
-# ---- simple login brute-force protection (per worker process, in memory) ----
-import time
-_FAILS = {}                 # key -> [timestamps of failed attempts]
-_WINDOW = 15 * 60           # look back 15 minutes
-_MAX_PER_ACCOUNT = 5        # failed attempts per (ip + email)
-_MAX_PER_IP = 20            # failed attempts per ip, any email
+# ---- login brute-force protection (stored in the database, shared by all workers) ----
+_WINDOW = timedelta(minutes=15)   # look back 15 minutes
+_MAX_PER_ACCOUNT = 5              # failed attempts per (ip + email)
+_MAX_PER_IP = 20                  # failed attempts per ip, any email
 
 
-def _recent(key):
-    now = time.time()
-    hits = [t for t in _FAILS.get(key, []) if now - t < _WINDOW]
-    if hits:
-        _FAILS[key] = hits
-    else:
-        _FAILS.pop(key, None)
-    return hits
+def _count_failures(ip, email=None):
+    q = LoginAttempt.query.filter(LoginAttempt.ip == ip,
+                                  LoginAttempt.created_at >= datetime.utcnow() - _WINDOW)
+    if email is not None:
+        q = q.filter(LoginAttempt.email == email)
+    return q.count()
 
 
 def _is_locked(ip, email):
-    return len(_recent(("acct", ip, email))) >= _MAX_PER_ACCOUNT or len(_recent(("ip", ip))) >= _MAX_PER_IP
+    return _count_failures(ip, email) >= _MAX_PER_ACCOUNT or _count_failures(ip) >= _MAX_PER_IP
 
 
 def _record_failure(ip, email):
-    now = time.time()
-    _FAILS.setdefault(("acct", ip, email), []).append(now)
-    _FAILS.setdefault(("ip", ip), []).append(now)
-    if len(_FAILS) > 5000:                      # keep memory bounded
-        for k in list(_FAILS):
-            _recent(k)
+    db.session.add(LoginAttempt(ip=ip[:64], email=email[:120]))
+    # housekeeping: rows older than a day are useless, so keep the table tiny
+    LoginAttempt.query.filter(LoginAttempt.created_at < datetime.utcnow() - timedelta(days=1)).delete()
+    db.session.commit()
+
+
+def _clear_failures(ip, email):
+    LoginAttempt.query.filter_by(ip=ip, email=email).delete()
+    db.session.commit()
 
 
 def _is_safe_next_url(target):
@@ -62,7 +62,7 @@ def login():
             return render_template("auth/login.html", form=form), 429
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(form.password.data):
-            _FAILS.pop(("acct", ip, email), None)
+            _clear_failures(ip, email)
             login_user(user)
             next_page = request.args.get("next")
             if not _is_safe_next_url(next_page):

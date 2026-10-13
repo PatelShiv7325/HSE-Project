@@ -3,7 +3,7 @@ import base64
 import hashlib
 import logging
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from flask import current_app
 from sqlalchemy.types import Text, TypeDecorator
 
@@ -12,11 +12,22 @@ log = logging.getLogger(__name__)
 
 
 def _fernet():
-    key = current_app.config.get("FIELD_ENCRYPTION_KEY")
-    if not key:   # derive a stable key from SECRET_KEY (so no extra setting is required)
-        digest = hashlib.sha256(current_app.config["SECRET_KEY"].encode("utf-8")).digest()
-        key = base64.urlsafe_b64encode(digest)
-    return Fernet(key if isinstance(key, bytes) else key.encode("utf-8"))
+    """Encrypts with FIELD_ENCRYPTION_KEY when set, and can ALWAYS still read values that were
+    encrypted with the old SECRET_KEY-derived key. So you can add FIELD_ENCRYPTION_KEY later
+    (or rotate SECRET_KEY) without losing the stored portal passwords."""
+    digest = hashlib.sha256(current_app.config["SECRET_KEY"].encode("utf-8")).digest()
+    keys = [base64.urlsafe_b64encode(digest)]            # old / fallback key
+    explicit = current_app.config.get("FIELD_ENCRYPTION_KEY")
+    if explicit:
+        explicit = explicit if isinstance(explicit, bytes) else explicit.encode("utf-8")
+        keys.insert(0, explicit)                          # first key = used for new encryption
+    try:
+        return MultiFernet([Fernet(k) for k in keys])
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(
+            "FIELD_ENCRYPTION_KEY is not a valid key. Create one with:  python -c "
+            "\"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        ) from exc
 
 
 def encrypt_text(value):
