@@ -184,6 +184,17 @@ def main():
         show_address()
         return
 
+    # Automatic update from GitHub Releases (see updater.py). Runs only in the installed .exe, and
+    # only when this is the first copy starting. A problem here must never stop the app opening.
+    if FROZEN and "--no-update" not in sys.argv and not port_in_use():
+        try:
+            import updater
+            if updater.run_update_flow(DATA_DIR, APP_ROOT):
+                return          # the installer is taking over and will restart the app when done
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
     server = None
     new_admin = None
     if not port_in_use():

@@ -14,6 +14,7 @@ venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --windowed ^
   --collect-submodules app --collect-all playwright ^
   --hidden-import config --hidden-import email_service --hidden-import whatsapp_service ^
   --hidden-import sqlalchemy.dialects.sqlite ^
+  --hidden-import updater --hidden-import app_version ^
   desktop_app.py || (echo PyInstaller failed. & pause & exit /b 1)
 
 call :makeinstaller installer_server.iss

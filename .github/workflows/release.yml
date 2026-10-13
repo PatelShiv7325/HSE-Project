@@ -1,0 +1,83 @@
+# Every push to main: run the tests -> build the Windows installer -> publish it as a GitHub Release.
+# The installed server app finds that release the next time it starts and offers to update.
+name: Build and release server app
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "tests/**", ".gitignore", ".dockerignore"]
+  workflow_dispatch:          # also lets you press "Run workflow" by hand
+
+permissions:
+  contents: write             # needed to create the release
+
+env:
+  BASE_VERSION: "1.0"         # change to 1.1 / 2.0 for a bigger step; the last number is added automatically
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
+  release:
+    needs: test               # a failing test means NO release is published
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set the version number
+        shell: bash
+        run: |
+          VERSION="${BASE_VERSION}.${{ github.run_number }}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          printf '__version__ = "%s"\n' "$VERSION" > app_version.py
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build the app (PyInstaller)
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed `
+            --name GlobalHSE-Server --icon hse.ico `
+            --add-data "app/templates;app/templates" --add-data "app/static;app/static" `
+            --collect-submodules app --collect-all playwright `
+            --hidden-import config --hidden-import email_service --hidden-import whatsapp_service `
+            --hidden-import sqlalchemy.dialects.sqlite --hidden-import updater --hidden-import app_version `
+            desktop_app.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Build the installer (Inno Setup) and its checksum
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VERSION" installer_server.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $f = "installer_output\GlobalHSE-Server-Setup.exe"
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          "$h  GlobalHSE-Server-Setup.exe" | Out-File -Encoding ascii "$f.sha256"
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$env:VERSION" `
+            "installer_output/GlobalHSE-Server-Setup.exe" "installer_output/GlobalHSE-Server-Setup.exe.sha256" `
+            --title "Global HSE Server $env:VERSION" `
+            --notes "Automatic build of commit ${{ github.sha }}" `
+            --target "${{ github.sha }}"
